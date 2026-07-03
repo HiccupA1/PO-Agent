@@ -1,4 +1,4 @@
-# Agentic Document Intelligence Copilot
+# PO Agent
 
 An AI-powered full-stack copilot for document intelligence workflows.
 
