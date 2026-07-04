@@ -70,19 +70,39 @@ For `prioritize_backlog`, the agent supports pasted backlog lists, vague product
 
 The scoring model differs from simple LLM output because it is deterministic and explainable. Each item receives visible scores for reach, impact, confidence, effort, risk reduction, and readiness. Higher effort reduces the final score, while stronger value, risk reduction, and readiness raise it.
 
-## MCP-Style Mock Tools
+## MCP-Style Tool Architecture
 
-The backend defines a minimal `MCPTool` interface with a `run` method. Each mock tool follows that shape:
+Phase 4 introduces a cleaner MCP-style abstraction for external tools. Each tool exposes a manifest and an `execute(input)` method:
 
-- `MockJiraTool` returns sample backlog items.
-- `MockSharePointTool` returns sample product context.
-- `MockAuditLogTool` records run summaries in memory and a gitignored `local_data/audit_log.json` file.
+- `tool_name`
+- `display_name`
+- `description`
+- `input_schema`
+- `output_schema`
+- `execute(input)`
 
-In Phases 2 and 3, these tools make the local demo feel like an enterprise workflow without needing paid APIs or real system access. Jira stands in for related backlog context, SharePoint stands in for product context, and audit logging stands in for governance and observability.
+The `ToolRegistry` registers available tools, lists manifests, gets tools by name, and executes a tool by name. Agent workflows call the registry rather than importing Jira, SharePoint, Teams, or audit implementations directly.
+
+Registered mock tools:
+
+- `mock_jira.search_backlog`
+- `mock_jira.create_story_preview`
+- `mock_sharepoint.get_product_context`
+- `mock_sharepoint.search_stakeholder_notes`
+- `mock_teams.get_recent_feedback`
+- `mock_audit_log.record_event`
+
+The mock tools make the local demo feel like an enterprise workflow without needing paid APIs or real system access. Jira stands in for related backlog context, SharePoint stands in for product context, Teams stands in for stakeholder feedback, and audit logging stands in for governance and observability.
+
+## Tool Manifest and Debug Endpoints
+
+`GET /tools` returns registered tool manifests for UI and debugging. `POST /tools/run` executes a selected mock tool and returns output plus a one-step tool trace. The frontend Tool Explorer uses both endpoints.
+
+This is useful for interviews because it shows that tools are discoverable, typed, and executable through a common layer instead of being hidden helper functions.
 
 ## Why This Is Agentic
 
-The product is agentic because the backend does more than transform text in a single step. It plans the task, calls mock tools for context, evaluates readiness and INVEST quality, produces structured backlog artifacts, records observable trace steps, and flags human review before the output can be treated as delivery-ready.
+The product is agentic because the backend does more than transform text in a single step. It plans the task, selects tools through a registry, calls mock tools for context, evaluates readiness and INVEST quality, produces structured backlog artifacts, records observable trace steps, and flags human review before the output can be treated as delivery-ready.
 
 ## Technical Product Owner Value
 

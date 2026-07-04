@@ -12,7 +12,7 @@ Technical Product Owners often spend too much time during sprint-zero and backlo
 
 ## Current Phase
 
-Phase 3: Backlog Scoring and Prioritization Agent is implemented. The app now supports structured acceptance criteria drafting, epic decomposition into INVEST-style user stories, release slicing, structured DoR checks, backlog prioritization, traceable mock tool use, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required yet.
+Phase 4: MCP-Style Integration Layer is implemented. The app now supports structured acceptance criteria drafting, epic decomposition, Definition of Ready checks, backlog prioritization, registry-based mock tools, tool manifests, debug tool execution, traceable tool metadata, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required yet.
 
 ## Planned Stack
 
@@ -39,6 +39,8 @@ The backend exposes:
 
 - `GET /health`
 - `POST /agent/run`
+- `GET /tools`
+- `POST /tools/run`
 
 ### Frontend
 
@@ -61,8 +63,44 @@ By default, the frontend expects the backend at `http://localhost:8000`.
 - Check Definition of Ready with structured pass/fail analysis and recommendations
 - Prioritize backlog items using a deterministic RICE + Risk + Readiness scoring model
 - Highlight quick wins, high-risk items, blocked items, and recommended sprint candidates
+- List MCP-style mock tool manifests
+- Run registered mock tools through a debug endpoint and frontend Tool Explorer
 - Return observable agent trace steps
 - Show a local backlog preview
+
+## MCP-Style Tool Layer
+
+Current tools are mock implementations, but they follow an adapter and manifest style that can be replaced later by real Jira, SharePoint, Teams, Microsoft Graph, or audit tools.
+
+Each registered tool exposes:
+
+- tool name
+- display name
+- description
+- input schema
+- output schema
+- `execute(input)` behavior
+
+The agent uses `ToolRegistry` instead of calling Jira or SharePoint classes directly. This keeps the agent workflow stable while future real MCP integrations replace mock implementations behind the same tool names.
+
+Tool debug endpoints:
+
+```http
+GET /tools
+POST /tools/run
+```
+
+Example `/tools/run` payload:
+
+```json
+{
+  "tool_name": "mock_jira.search_backlog",
+  "input": {
+    "query": "purchase order",
+    "limit": 5
+  }
+}
+```
 
 ## Example Acceptance Criteria Input
 
@@ -137,7 +175,6 @@ Scoring model:
 - Real LLM-backed reasoning
 - Jira MCP tool integration
 - Microsoft Graph, Teams, and SharePoint MCP tools
-- Real MCP-style integration layer
 - Persistent audit logging
 - Claude Agent SDK or real LLM adapter
 - Human-in-the-loop approval workflows

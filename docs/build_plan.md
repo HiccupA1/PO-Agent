@@ -30,7 +30,7 @@ Current capabilities:
 - Scores Definition of Ready across persona, goal, value, criteria, dependencies, edge cases, non-functional needs, testability, scope, and ambiguity
 - Returns passed checks, failed checks, recommendations, risk flags, and human review reasons
 
-## Phase 3: Backlog Scoring and Prioritization - Implemented
+## Phase 3: Backlog Scoring and Prioritization - Complete
 
 Implemented deterministic backlog scoring and prioritization.
 
@@ -43,9 +43,18 @@ Current capabilities:
 - Records prioritization-specific audit metadata
 - Renders prioritization results in the frontend
 
-## Phase 4: MCP-Style Integration Layer
+## Phase 4: MCP-Style Integration Layer - Implemented
 
-Integrate Jira MCP, Microsoft Graph MCP, Teams, SharePoint, and persistent audit logging behind the existing tool abstraction.
+Implemented a registry-based MCP-style mock tool layer.
+
+Current capabilities:
+
+- Defines a common MCP-style base tool interface with manifests and `execute`
+- Registers Jira, SharePoint, Teams, and audit mock tools
+- Exposes `GET /tools` and `POST /tools/run`
+- Refactors agent workflows to call tools through `ToolRegistry`
+- Adds tool trace metadata for tool name, input summary, output summary, and status
+- Adds a frontend Tool Explorer for manifests and simple tool execution
 
 ## Phase 5: Real LLM / Claude Agent SDK Adapter
 

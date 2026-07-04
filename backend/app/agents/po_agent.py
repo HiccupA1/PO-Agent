@@ -9,18 +9,14 @@ from app.schemas.agent import (
 )
 from app.services.llm_service import MockLLMService
 from app.services.trace_service import TraceService
-from app.tools.mock_audit_log import MockAuditLogTool
-from app.tools.mock_jira import MockJiraTool
-from app.tools.mock_sharepoint import MockSharePointTool
+from app.tools.registry import ToolRegistry, create_default_tool_registry
 
 
 class ProductOwnerAgent:
-    def __init__(self) -> None:
+    def __init__(self, tool_registry: ToolRegistry | None = None) -> None:
         self.llm = MockLLMService()
         self.trace_service = TraceService()
-        self.audit_log = MockAuditLogTool()
-        self.jira = MockJiraTool()
-        self.sharepoint = MockSharePointTool()
+        self.tool_registry = tool_registry or create_default_tool_registry()
 
     def run(self, request: AgentRunRequest) -> AgentRunResponse:
         trace: list[TraceStep] = []
@@ -36,21 +32,19 @@ class ProductOwnerAgent:
 
         self.trace_service.add(trace, "plan", f"Agent identified the task as '{request.task}'.")
 
-        product_context = self.sharepoint.run({"context": request.context})
-        self.trace_service.add(
+        product_context = self._execute_tool(
             trace,
-            "tool",
-            "Loaded product context from the mock SharePoint tool.",
-            tool_name=self.sharepoint.name,
-        )
+            "mock_sharepoint.get_product_context",
+            {"context": request.context, "topic": request.task},
+            "Loaded product context using mock SharePoint MCP tool.",
+        )["context"]
 
-        backlog_items = self.jira.run({"task": request.task})
-        self.trace_service.add(
+        backlog_items = self._execute_tool(
             trace,
-            "tool",
-            "Retrieved sample backlog items from the mock Jira tool.",
-            tool_name=self.jira.name,
-        )
+            "mock_jira.search_backlog",
+            {"query": request.input or request.task, "limit": 5},
+            "Retrieved sample backlog items using mock Jira MCP tool.",
+        )["items"]
 
         final_output = self.llm.generate(
             task=request.task,
@@ -105,23 +99,19 @@ class ProductOwnerAgent:
             metadata={"input_preview": request.input[:80]},
         )
 
-        product_context = self.sharepoint.run({"context": request.context})
-        self.trace_service.add(
+        product_context = self._execute_tool(
             trace,
-            "tool",
-            "Loaded product context using mock SharePoint tool.",
-            tool_name=self.sharepoint.name,
-            metadata={"product_name": product_context.get("product_name")},
-        )
+            "mock_sharepoint.get_product_context",
+            {"context": request.context, "topic": "acceptance criteria"},
+            "Loaded product context using mock SharePoint MCP tool.",
+        )["context"]
 
-        backlog_items = self.jira.run({"task": request.task})
-        self.trace_service.add(
+        backlog_items = self._execute_tool(
             trace,
-            "tool",
-            "Checked related backlog items using mock Jira tool.",
-            tool_name=self.jira.name,
-            metadata={"related_items": [item.get("id") for item in backlog_items[:3]]},
-        )
+            "mock_jira.search_backlog",
+            {"query": request.input, "limit": 5},
+            "Checked related backlog items using mock Jira MCP tool.",
+        )["items"]
 
         output = self.llm.generate(
             task=request.task,
@@ -185,23 +175,19 @@ class ProductOwnerAgent:
             metadata={"input_preview": request.input[:80]},
         )
 
-        product_context = self.sharepoint.run({"context": request.context})
-        self.trace_service.add(
+        product_context = self._execute_tool(
             trace,
-            "tool",
-            "Loaded product context from mock SharePoint tool.",
-            tool_name=self.sharepoint.name,
-            metadata={"product_name": product_context.get("product_name")},
-        )
+            "mock_sharepoint.get_product_context",
+            {"context": request.context, "topic": "epic decomposition"},
+            "Loaded product context using mock SharePoint MCP tool.",
+        )["context"]
 
-        backlog_items = self.jira.run({"task": request.task})
-        self.trace_service.add(
+        backlog_items = self._execute_tool(
             trace,
-            "tool",
-            "Checked related backlog from mock Jira tool.",
-            tool_name=self.jira.name,
-            metadata={"related_items": [item.get("id") for item in backlog_items[:3]]},
-        )
+            "mock_jira.search_backlog",
+            {"query": request.input, "limit": 5},
+            "Checked related backlog using mock Jira MCP tool.",
+        )["items"]
         self.trace_service.add(
             trace,
             "evaluation",
@@ -280,6 +266,13 @@ class ProductOwnerAgent:
             metadata={"input_preview": request.input[:80]},
         )
 
+        self._execute_tool(
+            trace,
+            "mock_sharepoint.search_stakeholder_notes",
+            {"query": request.input, "limit": 2},
+            "Searched stakeholder notes using mock SharePoint MCP tool.",
+        )
+
         output = self.llm.generate(
             task=request.task,
             user_input=request.input,
@@ -356,23 +349,19 @@ class ProductOwnerAgent:
             metadata={"input_line_count": len(input_items), "uses_mock_fallback": not bool(request.input.strip())},
         )
 
-        product_context = self.sharepoint.run({"context": request.context})
-        self.trace_service.add(
+        product_context = self._execute_tool(
             trace,
-            "tool",
-            "Loaded product context using mock SharePoint tool.",
-            tool_name=self.sharepoint.name,
-            metadata={"product_name": product_context.get("product_name")},
-        )
+            "mock_sharepoint.get_product_context",
+            {"context": request.context, "topic": "backlog prioritization"},
+            "Loaded product context using mock SharePoint MCP tool.",
+        )["context"]
 
-        backlog_items = self.jira.run({"task": request.task})
-        self.trace_service.add(
+        backlog_items = self._execute_tool(
             trace,
-            "tool",
-            "Retrieved related backlog metadata using mock Jira tool.",
-            tool_name=self.jira.name,
-            metadata={"mock_backlog_count": len(backlog_items)},
-        )
+            "mock_jira.search_backlog",
+            {"query": request.input or "product owner backlog", "limit": 5},
+            "Retrieved related backlog metadata using mock Jira MCP tool.",
+        )["items"]
 
         output = self.llm.generate(
             task=request.task,
@@ -450,7 +439,8 @@ class ProductOwnerAgent:
         quick_win_count: int | None = None,
         blocked_item_count: int | None = None,
     ) -> None:
-        self.audit_log.run(
+        self.tool_registry.execute(
+            "mock_audit_log.record_event",
             {
                 "task": request.task,
                 "input_preview": request.input,
@@ -465,3 +455,57 @@ class ProductOwnerAgent:
                 "blocked_item_count": blocked_item_count,
             }
         )
+
+    def _execute_tool(
+        self,
+        trace: list[TraceStep],
+        tool_name: str,
+        tool_input: dict,
+        message: str,
+    ) -> dict:
+        try:
+            output = self.tool_registry.execute(tool_name, tool_input)
+            status = "success"
+        except Exception as exc:
+            output = {"error": str(exc)}
+            status = "error"
+            self.trace_service.add(
+                trace,
+                "tool",
+                message,
+                tool_name=tool_name,
+                metadata={
+                    "tool_name": tool_name,
+                    "input_summary": self._summarize_payload(tool_input),
+                    "output_summary": str(exc),
+                    "status": status,
+                },
+            )
+            raise
+
+        self.trace_service.add(
+            trace,
+            "tool",
+            message,
+            tool_name=tool_name,
+            metadata={
+                "tool_name": tool_name,
+                "input_summary": self._summarize_payload(tool_input),
+                "output_summary": self._summarize_payload(output),
+                "status": status,
+            },
+        )
+        return output
+
+    def _summarize_payload(self, payload: dict) -> str:
+        parts: list[str] = []
+        for key, value in payload.items():
+            if isinstance(value, list):
+                parts.append(f"{key}: {len(value)} item(s)")
+            elif isinstance(value, dict):
+                parts.append(f"{key}: object with {len(value)} field(s)")
+            elif value is None:
+                parts.append(f"{key}: none")
+            else:
+                parts.append(f"{key}: {str(value)[:80]}")
+        return "; ".join(parts) if parts else "empty"

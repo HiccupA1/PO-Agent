@@ -3,18 +3,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.tools.mcp_base import MCPTool
+from app.tools.mcp_base import MCPBaseTool
 
 
-class MockAuditLogTool(MCPTool):
-    name = "mock_audit_log"
+class MockAuditLogRecordEventTool(MCPBaseTool):
+    tool_name = "mock_audit_log.record_event"
+    display_name = "Mock Audit Log Event Recorder"
     description = "Stores run summaries in memory and local JSON for this process."
+    input_schema = {
+        "task": "string",
+        "input_preview": "string",
+        "output_type": "string",
+        "human_review_required": "boolean",
+        "trace_step_count": "integer",
+    }
+    output_schema = {"recorded": "boolean", "count": "integer"}
 
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
         self.log_path = Path(__file__).resolve().parents[3] / "local_data" / "audit_log.json"
 
-    def run(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
         record = {
             "timestamp": datetime.now(UTC).isoformat(),
             "task": payload.get("task", "unknown"),
@@ -43,3 +52,7 @@ class MockAuditLogTool(MCPTool):
                 existing = []
         existing.append(record)
         self.log_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+
+class MockAuditLogTool(MockAuditLogRecordEventTool):
+    pass

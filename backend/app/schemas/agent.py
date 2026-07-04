@@ -25,6 +25,29 @@ class TraceStep(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class ToolManifest(BaseModel):
+    tool_name: str
+    display_name: str
+    description: str
+    input_schema: dict[str, str]
+    output_schema: dict[str, str]
+
+
+class ToolListResponse(BaseModel):
+    tools: list[ToolManifest]
+
+
+class ToolRunRequest(BaseModel):
+    tool_name: str
+    input: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolRunResponse(BaseModel):
+    tool_name: str
+    output: dict[str, Any]
+    trace: list[TraceStep]
+
+
 class AcceptanceCriteriaItem(BaseModel):
     id: str
     title: str

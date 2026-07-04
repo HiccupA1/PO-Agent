@@ -58,6 +58,10 @@ h3 {
   align-items: flex-start;
 }
 
+.tool-explorer {
+  margin-top: 16px;
+}
+
 .agent-grid {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
@@ -462,9 +466,62 @@ small {
   margin-bottom: 6px;
 }
 
+.tool-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  gap: 16px;
+}
+
+.tool-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tool-button {
+  background: #f8fafc;
+  border: 1px solid #d8dee6;
+  color: #17202a;
+  text-align: left;
+}
+
+.tool-button.active {
+  background: #e7f0ff;
+  border-color: #1f6feb;
+  color: #1f4fa3;
+}
+
+.tool-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.schema-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.schema-block {
+  background: #f8fafc;
+  border: 1px solid #e1e6ed;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.schema-block ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.tool-result {
+  border-top: 1px solid #e1e6ed;
+  padding-top: 12px;
+}
+
 @media (max-width: 900px) {
   .page-grid,
-  .agent-grid {
+  .agent-grid,
+  .tool-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -474,7 +531,8 @@ small {
   .detail-grid,
   .weight-grid,
   .metric-grid,
-  .summary-grid {
+  .summary-grid,
+  .schema-grid {
     grid-template-columns: 1fr;
   }
 

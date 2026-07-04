@@ -1,5 +1,6 @@
 import { AgentChat } from "../components/AgentChat";
 import { BacklogPreview } from "../components/BacklogPreview";
+import { ToolExplorer } from "../components/ToolExplorer";
 
 export default function Home() {
   return (
@@ -13,6 +14,8 @@ export default function Home() {
         <AgentChat />
         <BacklogPreview />
       </div>
+
+      <ToolExplorer />
     </main>
   );
 }

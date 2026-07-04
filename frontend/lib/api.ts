@@ -160,6 +160,20 @@ export type AgentResponse = {
   review_reason?: string | null;
 };
 
+export type ToolManifest = {
+  tool_name: string;
+  display_name: string;
+  description: string;
+  input_schema: Record<string, string>;
+  output_schema: Record<string, string>;
+};
+
+export type ToolRunResponse = {
+  tool_name: string;
+  output: Record<string, unknown>;
+  trace: TraceEvent[];
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -178,6 +192,39 @@ export async function runAgent(task: AgentTask, input: string): Promise<AgentRes
 
   if (!response.ok) {
     throw new Error("Agent request failed.");
+  }
+
+  return response.json();
+}
+
+export async function listTools(): Promise<ToolManifest[]> {
+  const response = await fetch(`${API_BASE_URL}/tools`);
+
+  if (!response.ok) {
+    throw new Error("Tool manifest request failed.");
+  }
+
+  const data = await response.json();
+  return data.tools;
+}
+
+export async function runTool(
+  toolName: string,
+  input: Record<string, unknown>
+): Promise<ToolRunResponse> {
+  const response = await fetch(`${API_BASE_URL}/tools/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      tool_name: toolName,
+      input
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("Tool execution failed.");
   }
 
   return response.json();
