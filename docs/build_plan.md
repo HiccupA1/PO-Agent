@@ -17,7 +17,7 @@ Current capabilities:
 - Shows agent trace steps for planning, mock tool calls, evaluation, output, and human review
 - Records lightweight audit summaries locally
 
-## Phase 2: Epic Decomposition and DoR Checks - Implemented
+## Phase 2: Epic Decomposition and DoR Checks - Complete
 
 Implemented structured epic decomposition and Definition of Ready analysis.
 
@@ -30,9 +30,18 @@ Current capabilities:
 - Scores Definition of Ready across persona, goal, value, criteria, dependencies, edge cases, non-functional needs, testability, scope, and ambiguity
 - Returns passed checks, failed checks, recommendations, risk flags, and human review reasons
 
-## Phase 3: Backlog Scoring and Prioritization
+## Phase 3: Backlog Scoring and Prioritization - Implemented
 
-Add scoring for value, risk, urgency, dependency load, and readiness.
+Implemented deterministic backlog scoring and prioritization.
+
+Current capabilities:
+
+- Parses pasted backlog lists, vague product goals, or mock Jira fallback data
+- Scores reach, impact, confidence, effort, risk reduction, and readiness
+- Ranks backlog items with high, medium, and low priority labels
+- Identifies quick wins, high-risk items, blocked items, and sprint candidates
+- Records prioritization-specific audit metadata
+- Renders prioritization results in the frontend
 
 ## Phase 4: MCP-Style Integration Layer
 
@@ -41,3 +50,7 @@ Integrate Jira MCP, Microsoft Graph MCP, Teams, SharePoint, and persistent audit
 ## Phase 5: Real LLM / Claude Agent SDK Adapter
 
 Replace deterministic mock behavior with a production-grade agent loop, stronger observability, review checkpoints, and deployment-ready controls.
+
+## Phase 6: Demo Polish and Interview Walkthrough
+
+Create a guided demo script, polished sample data, and a concise enterprise AI narrative for interviews.

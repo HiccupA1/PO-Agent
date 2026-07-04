@@ -12,7 +12,7 @@ Technical Product Owners often spend too much time during sprint-zero and backlo
 
 ## Current Phase
 
-Phase 2: Epic Decomposition + Definition of Ready Agent is implemented. The app now supports structured acceptance criteria drafting, epic decomposition into INVEST-style user stories, release slicing, structured DoR checks, traceable mock tool use, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required yet.
+Phase 3: Backlog Scoring and Prioritization Agent is implemented. The app now supports structured acceptance criteria drafting, epic decomposition into INVEST-style user stories, release slicing, structured DoR checks, backlog prioritization, traceable mock tool use, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required yet.
 
 ## Planned Stack
 
@@ -59,6 +59,8 @@ By default, the frontend expects the backend at `http://localhost:8000`.
 - Decompose an epic into 4 to 6 INVEST-style user stories
 - Generate release slices for MVP, later enhancements, and operational/admin work
 - Check Definition of Ready with structured pass/fail analysis and recommendations
+- Prioritize backlog items using a deterministic RICE + Risk + Readiness scoring model
+- Highlight quick wins, high-risk items, blocked items, and recommended sprint candidates
 - Return observable agent trace steps
 - Show a local backlog preview
 
@@ -112,12 +114,29 @@ Output summary:
 - Risk flags and recommended next actions
 - Human review reason
 
+## Example Prioritization Demo Flow
+
+1. Paste a backlog item list.
+2. The agent scores each item using reach, impact, confidence, effort, risk reduction, and readiness.
+3. The agent ranks the backlog by weighted score.
+4. The agent highlights quick wins, high-risk items, and blockers.
+5. The agent recommends sprint candidates.
+6. The trace shows the scoring workflow and human review checkpoint.
+
+Scoring model:
+
+- Reach: 20%
+- Impact: 25%
+- Confidence: 15%
+- Effort: 15%, inverted so higher effort reduces score
+- Risk reduction: 10%
+- Readiness: 15%
+
 ## Future Integrations
 
 - Real LLM-backed reasoning
 - Jira MCP tool integration
 - Microsoft Graph, Teams, and SharePoint MCP tools
-- Backlog scoring and prioritization
 - Real MCP-style integration layer
 - Persistent audit logging
 - Claude Agent SDK or real LLM adapter

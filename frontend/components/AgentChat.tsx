@@ -8,7 +8,8 @@ import type {
   AgentTask,
   DORCheckOutput,
   EpicDecompositionOutput,
-  InvestCheck
+  InvestCheck,
+  PrioritizationOutput
 } from "../lib/api";
 import { runAgent } from "../lib/api";
 import { TracePanel } from "./TracePanel";
@@ -16,7 +17,8 @@ import { TracePanel } from "./TracePanel";
 const taskOptions: AgentTask[] = [
   "draft_acceptance_criteria",
   "decompose_epic",
-  "check_dor"
+  "check_dor",
+  "prioritize_backlog"
 ];
 
 const sampleInputs = [
@@ -25,7 +27,8 @@ const sampleInputs = [
   "Users should receive notifications when purchase orders are delayed.",
   "Build purchase order approval system for enterprise procurement teams.",
   "Improve procurement experience.",
-  "As a finance manager, I want to approve or reject purchase orders so that procurement spend is controlled."
+  "As a finance manager, I want to approve or reject purchase orders so that procurement spend is controlled.",
+  "Prioritize these:\n1. Add purchase order approval workflow\n2. Add supplier onboarding form\n3. Add delayed PO notification\n4. Add invoice matching dashboard\n5. Add admin audit log export"
 ];
 
 function isAcceptanceCriteriaOutput(
@@ -42,6 +45,12 @@ function isEpicDecompositionOutput(
 
 function isDORCheckOutput(output: AgentResponse["final_output"]): output is DORCheckOutput {
   return typeof output !== "string" && "dor_score" in output;
+}
+
+function isPrioritizationOutput(
+  output: AgentResponse["final_output"]
+): output is PrioritizationOutput {
+  return typeof output !== "string" && "ranked_items" in output;
 }
 
 export function AgentChat() {
@@ -79,6 +88,10 @@ export function AgentChat() {
 
       if (isDORCheckOutput(result.final_output)) {
         return <DORCheckView output={result.final_output} />;
+      }
+
+      if (isPrioritizationOutput(result.final_output)) {
+        return <PrioritizationView output={result.final_output} />;
       }
 
       return (
@@ -385,5 +398,98 @@ function InvestChecklist({ invest }: { invest: InvestCheck }) {
       </div>
       <OutputList title="INVEST Notes" items={invest.notes} />
     </section>
+  );
+}
+
+function PrioritizationView({ output }: { output: PrioritizationOutput }) {
+  const weights = output.scoring_model.weights;
+  const weightEntries = [
+    ["Reach", weights.reach],
+    ["Impact", weights.impact],
+    ["Confidence", weights.confidence],
+    ["Effort", weights.effort],
+    ["Risk Reduction", weights.risk_reduction],
+    ["Readiness", weights.readiness]
+  ];
+
+  return (
+    <div className="structured-output">
+      <div className="story-block">
+        <h3>Prioritization Summary</h3>
+        <p>{output.prioritization_summary}</p>
+      </div>
+
+      <ReviewBanner required={output.human_review_required} reason={output.review_reason} />
+
+      <section className="scoring-model">
+        <h3>{output.scoring_model.name}</h3>
+        <p>{output.scoring_model.description}</p>
+        <div className="weight-grid">
+          {weightEntries.map(([label, value]) => (
+            <span key={label}>
+              <strong>{value}%</strong>
+              {label}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h3>Ranked Backlog</h3>
+        <div className="ranked-list">
+          {output.ranked_items.map((item) => (
+            <article className="ranked-card" key={item.id}>
+              <div className="ranked-header">
+                <div>
+                  <strong>
+                    #{item.rank} {item.title}
+                  </strong>
+                  <p>{item.rationale}</p>
+                </div>
+                <div className="score-pill">
+                  <span>{item.weighted_score}</span>
+                  <small>{item.priority}</small>
+                </div>
+              </div>
+
+              <div className="metric-grid">
+                <Metric label="Reach" value={item.reach} />
+                <Metric label="Impact" value={item.impact} />
+                <Metric label="Confidence" value={item.confidence} />
+                <Metric label="Effort" value={item.effort} />
+                <Metric label="Risk Reduction" value={item.risk_reduction} />
+                <Metric label="Readiness" value={item.readiness} suffix="%" />
+              </div>
+
+              <OutputList title="Tradeoffs" items={item.tradeoffs} />
+              <OutputList title="Dependencies" items={item.dependencies} />
+              <div className="next-action">
+                <strong>Recommended next action</strong>
+                <p>{item.recommended_next_action}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <div className="summary-grid">
+        <OutputList title="Quick Wins" items={output.quick_wins} />
+        <OutputList title="High-Risk Items" items={output.high_risk_items} />
+        <OutputList title="Blocked Items" items={output.blocked_items} />
+        <OutputList title="Recommended Sprint Candidates" items={output.recommended_sprint_candidates} />
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value, suffix = "" }: { label: string; value: number; suffix?: string }) {
+  return (
+    <div>
+      <small>{label}</small>
+      <strong>
+        {value}
+        {suffix}
+      </strong>
+    </div>
   );
 }

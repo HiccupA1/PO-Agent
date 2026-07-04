@@ -4,6 +4,7 @@ from app.schemas.agent import (
     AgentRunResponse,
     DORCheckOutput,
     EpicDecompositionOutput,
+    PrioritizationOutput,
     TraceStep,
 )
 from app.services.llm_service import MockLLMService
@@ -30,6 +31,8 @@ class ProductOwnerAgent:
             return self._run_epic_decomposition(request, trace)
         if request.task == "check_dor":
             return self._run_dor_check(request, trace)
+        if request.task == "prioritize_backlog":
+            return self._run_prioritization(request, trace)
 
         self.trace_service.add(trace, "plan", f"Agent identified the task as '{request.task}'.")
 
@@ -333,6 +336,107 @@ class ProductOwnerAgent:
             review_reason=output.review_reason,
         )
 
+    def _run_prioritization(
+        self,
+        request: AgentRunRequest,
+        trace: list[TraceStep],
+    ) -> AgentRunResponse:
+        self.trace_service.add(
+            trace,
+            "plan",
+            "Agent received prioritization task and selected the RICE + Risk + Readiness workflow.",
+            metadata={"task": request.task},
+        )
+
+        input_items = [line for line in request.input.splitlines() if line.strip()]
+        self.trace_service.add(
+            trace,
+            "evaluation",
+            "Parsed backlog items from user input or prepared to use mock Jira fallback.",
+            metadata={"input_line_count": len(input_items), "uses_mock_fallback": not bool(request.input.strip())},
+        )
+
+        product_context = self.sharepoint.run({"context": request.context})
+        self.trace_service.add(
+            trace,
+            "tool",
+            "Loaded product context using mock SharePoint tool.",
+            tool_name=self.sharepoint.name,
+            metadata={"product_name": product_context.get("product_name")},
+        )
+
+        backlog_items = self.jira.run({"task": request.task})
+        self.trace_service.add(
+            trace,
+            "tool",
+            "Retrieved related backlog metadata using mock Jira tool.",
+            tool_name=self.jira.name,
+            metadata={"mock_backlog_count": len(backlog_items)},
+        )
+
+        output = self.llm.generate(
+            task=request.task,
+            user_input=request.input,
+            product_context=product_context,
+            backlog_items=backlog_items,
+        )
+        if not isinstance(output, PrioritizationOutput):
+            raise TypeError("Expected structured prioritization output.")
+
+        self.trace_service.add(
+            trace,
+            "evaluation",
+            "Applied RICE + Risk + Readiness scoring model to each backlog item.",
+            metadata={"ranked_item_count": len(output.ranked_items)},
+        )
+        self.trace_service.add(
+            trace,
+            "output",
+            "Ranked backlog items by weighted score.",
+            metadata={"top_ranked_item": output.ranked_items[0].title if output.ranked_items else None},
+        )
+        self.trace_service.add(
+            trace,
+            "evaluation",
+            "Identified quick wins, high-risk items, and blocked items.",
+            metadata={
+                "quick_wins": output.quick_wins,
+                "high_risk_items": output.high_risk_items,
+                "blocked_items": output.blocked_items,
+            },
+        )
+        self.trace_service.add(
+            trace,
+            "output",
+            "Recommended sprint candidates based on score, readiness, and blocker status.",
+            metadata={"recommended_sprint_candidates": output.recommended_sprint_candidates},
+        )
+        self.trace_service.add(
+            trace,
+            "human_review",
+            "Flagged Product Owner review checkpoint for prioritization assumptions and tradeoffs.",
+            metadata={"review_reason": output.review_reason},
+        )
+
+        self._record_audit(
+            request=request,
+            trace=trace,
+            human_review_required=output.human_review_required,
+            output_type="backlog_prioritization",
+            ranked_item_count=len(output.ranked_items),
+            top_ranked_item=output.ranked_items[0].title if output.ranked_items else None,
+            quick_win_count=len(output.quick_wins),
+            blocked_item_count=len(output.blocked_items),
+        )
+
+        return AgentRunResponse(
+            task=request.task,
+            final_output=output,
+            trace=trace,
+            human_review_required=output.human_review_required,
+            review_reason=output.review_reason,
+        )
+
     def _record_audit(
         self,
         request: AgentRunRequest,
@@ -341,6 +445,10 @@ class ProductOwnerAgent:
         output_type: str,
         readiness_score: int | None = None,
         generated_story_count: int | None = None,
+        ranked_item_count: int | None = None,
+        top_ranked_item: str | None = None,
+        quick_win_count: int | None = None,
+        blocked_item_count: int | None = None,
     ) -> None:
         self.audit_log.run(
             {
@@ -351,5 +459,9 @@ class ProductOwnerAgent:
                 "trace_step_count": len(trace),
                 "readiness_score": readiness_score,
                 "generated_story_count": generated_story_count,
+                "ranked_item_count": ranked_item_count,
+                "top_ranked_item": top_ranked_item,
+                "quick_win_count": quick_win_count,
+                "blocked_item_count": blocked_item_count,
             }
         )

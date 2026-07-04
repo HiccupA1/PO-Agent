@@ -24,6 +24,10 @@ class MockAuditLogTool(MCPTool):
             "trace_step_count": int(payload.get("trace_step_count", 0)),
             "readiness_score": payload.get("readiness_score"),
             "generated_story_count": payload.get("generated_story_count"),
+            "ranked_item_count": payload.get("ranked_item_count"),
+            "top_ranked_item": payload.get("top_ranked_item"),
+            "quick_win_count": payload.get("quick_win_count"),
+            "blocked_item_count": payload.get("blocked_item_count"),
         }
         self.events.append(record)
         self._append_local_record(record)

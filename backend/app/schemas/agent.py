@@ -7,12 +7,13 @@ AgentTask = Literal[
     "draft_acceptance_criteria",
     "decompose_epic",
     "check_dor",
+    "prioritize_backlog",
 ]
 
 
 class AgentRunRequest(BaseModel):
     task: AgentTask
-    input: str = Field(min_length=1)
+    input: str = ""
     context: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -113,9 +114,55 @@ class DORCheckOutput(BaseModel):
     review_reason: str
 
 
+class ScoringWeights(BaseModel):
+    reach: int
+    impact: int
+    confidence: int
+    effort: int
+    risk_reduction: int
+    readiness: int
+
+
+class ScoringModel(BaseModel):
+    name: str
+    description: str
+    weights: ScoringWeights
+
+
+class RankedBacklogItem(BaseModel):
+    rank: int
+    id: str
+    title: str
+    description: str
+    reach: int
+    impact: int
+    confidence: int
+    effort: int
+    risk_reduction: int
+    readiness: int
+    weighted_score: float
+    priority: Literal["High", "Medium", "Low"]
+    rationale: str
+    tradeoffs: list[str]
+    dependencies: list[str]
+    recommended_next_action: str
+
+
+class PrioritizationOutput(BaseModel):
+    prioritization_summary: str
+    scoring_model: ScoringModel
+    ranked_items: list[RankedBacklogItem]
+    quick_wins: list[str]
+    high_risk_items: list[str]
+    blocked_items: list[str]
+    recommended_sprint_candidates: list[str]
+    human_review_required: bool
+    review_reason: str
+
+
 class AgentRunResponse(BaseModel):
     task: AgentTask
-    final_output: str | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput
+    final_output: str | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput | PrioritizationOutput
     trace: list[TraceStep]
     human_review_required: bool
     review_reason: str | None = None

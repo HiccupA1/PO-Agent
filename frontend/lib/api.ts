@@ -1,7 +1,8 @@
 export type AgentTask =
   | "draft_acceptance_criteria"
   | "decompose_epic"
-  | "check_dor";
+  | "check_dor"
+  | "prioritize_backlog";
 
 export type TraceEvent = {
   step: number;
@@ -100,9 +101,60 @@ export type DORCheckOutput = {
   review_reason: string;
 };
 
+export type ScoringWeights = {
+  reach: number;
+  impact: number;
+  confidence: number;
+  effort: number;
+  risk_reduction: number;
+  readiness: number;
+};
+
+export type ScoringModel = {
+  name: string;
+  description: string;
+  weights: ScoringWeights;
+};
+
+export type RankedBacklogItem = {
+  rank: number;
+  id: string;
+  title: string;
+  description: string;
+  reach: number;
+  impact: number;
+  confidence: number;
+  effort: number;
+  risk_reduction: number;
+  readiness: number;
+  weighted_score: number;
+  priority: "High" | "Medium" | "Low";
+  rationale: string;
+  tradeoffs: string[];
+  dependencies: string[];
+  recommended_next_action: string;
+};
+
+export type PrioritizationOutput = {
+  prioritization_summary: string;
+  scoring_model: ScoringModel;
+  ranked_items: RankedBacklogItem[];
+  quick_wins: string[];
+  high_risk_items: string[];
+  blocked_items: string[];
+  recommended_sprint_candidates: string[];
+  human_review_required: boolean;
+  review_reason: string;
+};
+
 export type AgentResponse = {
   task: AgentTask;
-  final_output: string | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput;
+  final_output:
+    | string
+    | AcceptanceCriteriaOutput
+    | EpicDecompositionOutput
+    | DORCheckOutput
+    | PrioritizationOutput;
   trace: TraceEvent[];
   human_review_required: boolean;
   review_reason?: string | null;

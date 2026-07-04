@@ -11,7 +11,11 @@ from app.schemas.agent import (
     DefinitionOfReadyResult,
     EpicDecompositionOutput,
     InvestCheck,
+    PrioritizationOutput,
+    RankedBacklogItem,
     ReleaseSlice,
+    ScoringModel,
+    ScoringWeights,
 )
 
 
@@ -22,13 +26,15 @@ class MockLLMService:
         user_input: str,
         product_context: dict[str, Any],
         backlog_items: list[dict[str, Any]],
-    ) -> str | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput:
+    ) -> str | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput | PrioritizationOutput:
         if task == "draft_acceptance_criteria":
             return self._draft_acceptance_criteria(user_input, product_context, backlog_items)
         if task == "decompose_epic":
             return self._decompose_epic(user_input, product_context, backlog_items)
         if task == "check_dor":
             return self._check_dor(user_input)
+        if task == "prioritize_backlog":
+            return self._prioritize_backlog(user_input, product_context, backlog_items)
         return "Unsupported task."
 
     def _draft_acceptance_criteria(
@@ -667,3 +673,267 @@ class MockLLMService:
         if any(item.check == "Ambiguity is low" for item in failed):
             flags.append("Ambiguous wording may cause delivery churn during refinement.")
         return flags
+
+    def _prioritize_backlog(
+        self,
+        user_input: str,
+        product_context: dict[str, Any],
+        backlog_items: list[dict[str, Any]],
+    ) -> PrioritizationOutput:
+        parsed_items = self._parse_backlog_items(user_input, backlog_items)
+        scoring_model = ScoringModel(
+            name="RICE + Risk + Readiness",
+            description=(
+                "Scores backlog items using reach, impact, confidence, inverse effort, "
+                "risk reduction, and readiness so high-value, feasible work rises first."
+            ),
+            weights=ScoringWeights(
+                reach=20,
+                impact=25,
+                confidence=15,
+                effort=15,
+                risk_reduction=10,
+                readiness=15,
+            ),
+        )
+
+        ranked_items = [
+            self._score_backlog_item(index=index, title=item["title"], description=item["description"])
+            for index, item in enumerate(parsed_items, start=1)
+        ]
+        ranked_items.sort(key=lambda item: item.weighted_score, reverse=True)
+        for rank, item in enumerate(ranked_items, start=1):
+            item.rank = rank
+
+        quick_wins = [
+            item.id
+            for item in ranked_items
+            if item.weighted_score >= 70 and item.effort <= 4 and item.readiness >= 65
+        ]
+        high_risk_items = [
+            item.id
+            for item in ranked_items
+            if (
+                (item.impact >= 8 or item.risk_reduction >= 8)
+                and (item.readiness <= 70 or item.confidence < 6 or item.effort >= 6)
+            )
+        ]
+        blocked_items = [
+            item.id
+            for item in ranked_items
+            if item.readiness < 50 or any("integration" in dep.lower() or "policy" in dep.lower() for dep in item.dependencies)
+        ]
+        recommended_sprint_candidates = [
+            item.id
+            for item in ranked_items
+            if item.weighted_score >= 65 and item.readiness >= 60 and item.id not in blocked_items
+        ][:3]
+
+        human_review_required = bool(high_risk_items or blocked_items) or len(parsed_items) >= 5
+        review_reason = (
+            "Human review is required to validate scoring assumptions, dependencies, and sprint candidate tradeoffs."
+            if human_review_required
+            else "The ranked backlog has low apparent risk, but Product Owner review is still recommended before sprint planning."
+        )
+        product_name = product_context.get("product_name", "PO Agent")
+
+        return PrioritizationOutput(
+            prioritization_summary=(
+                f"Ranked {len(ranked_items)} backlog item(s) for {product_name} using deterministic "
+                "RICE-style scoring with risk reduction and readiness signals."
+            ),
+            scoring_model=scoring_model,
+            ranked_items=ranked_items,
+            quick_wins=quick_wins,
+            high_risk_items=high_risk_items,
+            blocked_items=blocked_items,
+            recommended_sprint_candidates=recommended_sprint_candidates,
+            human_review_required=human_review_required,
+            review_reason=review_reason,
+        )
+
+    def _parse_backlog_items(
+        self,
+        user_input: str,
+        backlog_items: list[dict[str, Any]],
+    ) -> list[dict[str, str]]:
+        text = user_input.strip()
+        if not text:
+            return [
+                {
+                    "title": item.get("title", f"Backlog item {index}"),
+                    "description": item.get("status", "Mock Jira backlog item"),
+                }
+                for index, item in enumerate(backlog_items, start=1)
+            ]
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        parsed: list[dict[str, str]] = []
+        for line in lines:
+            cleaned = re.sub(r"^(prioritize these:|backlog:)\s*", "", line, flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r"^[-*]\s+", "", cleaned)
+            cleaned = re.sub(r"^\d+[\.)]\s+", "", cleaned)
+            if not cleaned or cleaned.lower() in {"prioritize these:", "prioritize these"}:
+                continue
+            if len(cleaned.split()) >= 2:
+                parsed.append({"title": self._clean_phrase(cleaned), "description": self._clean_phrase(cleaned)})
+
+        if len(parsed) >= 2:
+            return parsed
+
+        lower = text.lower()
+        if "procurement" in lower or "purchase order" in lower or "supplier" in lower:
+            return [
+                {"title": "Map procurement pain points", "description": text},
+                {"title": "Add purchase order approval workflow", "description": text},
+                {"title": "Add supplier onboarding form", "description": text},
+                {"title": "Add delayed PO notification", "description": text},
+            ]
+        return [
+            {"title": "Clarify target persona and problem statement", "description": text},
+            {"title": "Define measurable success metrics", "description": text},
+            {"title": "Prototype highest-value workflow", "description": text},
+            {"title": "Add feedback and usage analytics", "description": text},
+        ]
+
+    def _score_backlog_item(self, index: int, title: str, description: str) -> RankedBacklogItem:
+        lower = f"{title} {description}".lower()
+        reach = self._score_reach(lower)
+        impact = self._score_impact(lower)
+        confidence = self._score_confidence(title)
+        effort = self._score_effort(lower)
+        risk_reduction = self._score_risk_reduction(lower)
+        readiness = self._score_prioritization_readiness(title, lower)
+        weighted_score = round(
+            (reach * 10 * 0.20)
+            + (impact * 10 * 0.25)
+            + (confidence * 10 * 0.15)
+            + ((10 - effort) * 10 * 0.15)
+            + (risk_reduction * 10 * 0.10)
+            + (readiness * 0.15),
+            1,
+        )
+        weighted_score = max(0, min(100, weighted_score))
+        priority = "High" if weighted_score >= 80 else "Medium" if weighted_score >= 55 else "Low"
+        dependencies = self._prioritization_dependencies(lower)
+        tradeoffs = self._prioritization_tradeoffs(lower, effort, readiness)
+
+        return RankedBacklogItem(
+            rank=index,
+            id=f"BI-{index}",
+            title=title,
+            description=description,
+            reach=reach,
+            impact=impact,
+            confidence=confidence,
+            effort=effort,
+            risk_reduction=risk_reduction,
+            readiness=readiness,
+            weighted_score=weighted_score,
+            priority=priority,  # type: ignore[arg-type]
+            rationale=(
+                f"Scores {weighted_score} because it combines reach {reach}/10, impact {impact}/10, "
+                f"confidence {confidence}/10, effort {effort}/10, risk reduction {risk_reduction}/10, "
+                f"and readiness {readiness}/100."
+            ),
+            tradeoffs=tradeoffs,
+            dependencies=dependencies,
+            recommended_next_action=self._recommended_prioritization_action(priority, readiness, dependencies),
+        )
+
+    def _score_reach(self, lower_text: str) -> int:
+        score = 5
+        if any(term in lower_text for term in ["enterprise", "all users", "notifications", "dashboard"]):
+            score += 2
+        if any(term in lower_text for term in ["approval", "purchase order", "procurement", "supplier"]):
+            score += 2
+        return min(score, 10)
+
+    def _score_impact(self, lower_text: str) -> int:
+        score = 5
+        if any(term in lower_text for term in ["approval", "approve", "invoice", "matching", "delayed", "bottleneck"]):
+            score += 3
+        if any(term in lower_text for term in ["money", "spend", "compliance", "audit", "procurement"]):
+            score += 2
+        return min(score, 10)
+
+    def _score_confidence(self, title: str) -> int:
+        lower = title.lower()
+        score = 8 if len(title.split()) >= 4 else 5
+        if any(term in lower for term in ["improve", "optimize", "better", "experience"]):
+            score -= 3
+        if any(term in lower for term in ["add", "build", "export", "notification", "dashboard", "workflow", "form"]):
+            score += 1
+        return max(1, min(score, 10))
+
+    def _score_effort(self, lower_text: str) -> int:
+        score = 3
+        if any(term in lower_text for term in ["dashboard", "invoice matching", "integration", "system"]):
+            score += 3
+        if any(term in lower_text for term in ["approval workflow", "multi-step", "admin", "export"]):
+            score += 2
+        if any(term in lower_text for term in ["notification", "form"]):
+            score += 1
+        return max(1, min(score, 10))
+
+    def _score_risk_reduction(self, lower_text: str) -> int:
+        score = 4
+        if any(term in lower_text for term in ["audit", "compliance", "approval", "approve", "delayed", "risk"]):
+            score += 3
+        if any(term in lower_text for term in ["invoice", "purchase order", "procurement", "spend"]):
+            score += 2
+        return min(score, 10)
+
+    def _score_prioritization_readiness(self, title: str, lower_text: str) -> int:
+        score = 55
+        if len(title.split()) >= 4:
+            score += 15
+        if any(term in lower_text for term in ["workflow", "form", "notification", "dashboard", "export"]):
+            score += 10
+        if any(term in lower_text for term in ["improve", "experience", "system"]):
+            score -= 15
+        if any(term in lower_text for term in ["integration", "invoice matching", "admin audit log"]):
+            score -= 10
+        return max(20, min(score, 95))
+
+    def _prioritization_dependencies(self, lower_text: str) -> list[str]:
+        dependencies: list[str] = []
+        if "approval" in lower_text:
+            dependencies.append("Approval policy and approver role model")
+        if "supplier" in lower_text:
+            dependencies.append("Supplier master data and onboarding fields")
+        if "notification" in lower_text or "delayed" in lower_text:
+            dependencies.append("Delay detection rules and notification channel")
+        if "invoice" in lower_text or "matching" in lower_text:
+            dependencies.append("Invoice and purchase order data integration")
+        if "admin" in lower_text or "audit" in lower_text or "export" in lower_text:
+            dependencies.append("Audit log schema and admin permissions")
+        return dependencies
+
+    def _prioritization_tradeoffs(self, lower_text: str, effort: int, readiness: int) -> list[str]:
+        tradeoffs: list[str] = []
+        if effort >= 7:
+            tradeoffs.append("High effort may delay sprint delivery unless scope is sliced.")
+        if readiness < 65:
+            tradeoffs.append("Readiness gaps should be resolved before sprint commitment.")
+        if "dashboard" in lower_text:
+            tradeoffs.append("Dashboard value depends on reliable upstream data quality.")
+        if "notification" in lower_text:
+            tradeoffs.append("Notification rules must balance urgency with alert fatigue.")
+        if not tradeoffs:
+            tradeoffs.append("Good candidate for refinement if acceptance criteria are confirmed.")
+        return tradeoffs
+
+    def _recommended_prioritization_action(
+        self,
+        priority: str,
+        readiness: int,
+        dependencies: list[str],
+    ) -> str:
+        if readiness < 55:
+            return "Run a refinement session to clarify scope, acceptance criteria, and dependencies."
+        if dependencies:
+            return "Confirm dependencies and split integration or policy work before sprint planning."
+        if priority == "High":
+            return "Prepare this item as a sprint candidate with acceptance criteria and sizing."
+        return "Keep in backlog and revisit after higher-value or more urgent work is refined."
