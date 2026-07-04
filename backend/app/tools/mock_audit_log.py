@@ -19,8 +19,11 @@ class MockAuditLogTool(MCPTool):
             "timestamp": datetime.now(UTC).isoformat(),
             "task": payload.get("task", "unknown"),
             "input_preview": str(payload.get("input_preview", ""))[:120],
+            "output_type": payload.get("output_type", "unknown"),
             "human_review_required": bool(payload.get("human_review_required", True)),
             "trace_step_count": int(payload.get("trace_step_count", 0)),
+            "readiness_score": payload.get("readiness_score"),
+            "generated_story_count": payload.get("generated_story_count"),
         }
         self.events.append(record)
         self._append_local_record(record)
@@ -30,6 +33,9 @@ class MockAuditLogTool(MCPTool):
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         existing: list[dict[str, Any]] = []
         if self.log_path.exists():
-            existing = json.loads(self.log_path.read_text(encoding="utf-8"))
+            try:
+                existing = json.loads(self.log_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                existing = []
         existing.append(record)
         self.log_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")

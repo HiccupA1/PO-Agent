@@ -4,7 +4,14 @@ from typing import Any
 from app.schemas.agent import (
     AcceptanceCriteriaItem,
     AcceptanceCriteriaOutput,
+    DORCheckOutput,
+    DORFailedCheck,
+    DORPassedCheck,
+    DecomposedUserStory,
     DefinitionOfReadyResult,
+    EpicDecompositionOutput,
+    InvestCheck,
+    ReleaseSlice,
 )
 
 
@@ -15,11 +22,11 @@ class MockLLMService:
         user_input: str,
         product_context: dict[str, Any],
         backlog_items: list[dict[str, Any]],
-    ) -> str | AcceptanceCriteriaOutput:
+    ) -> str | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput:
         if task == "draft_acceptance_criteria":
             return self._draft_acceptance_criteria(user_input, product_context, backlog_items)
         if task == "decompose_epic":
-            return self._decompose_epic(user_input, backlog_items)
+            return self._decompose_epic(user_input, product_context, backlog_items)
         if task == "check_dor":
             return self._check_dor(user_input)
         return "Unsupported task."
@@ -313,28 +320,350 @@ class MockLLMService:
         score = round((len(passed) / len(checks)) * 100)
         return DefinitionOfReadyResult(score=score, passed=passed, failed=failed)
 
-    def _decompose_epic(self, user_input: str, backlog_items: list[dict[str, Any]]) -> str:
-        related = ", ".join(item["id"] for item in backlog_items[:2])
-        return (
-            f"Epic decomposition draft:\n{user_input}\n\n"
-            "Proposed user stories:\n"
-            "1. As a Product Owner, I want to capture the primary user goal so that the team can align on business value.\n"
-            "2. As a delivery team member, I want the workflow split into testable slices so that each story can be estimated independently.\n"
-            "3. As a stakeholder, I want review checkpoints so that important assumptions are validated before sprint planning.\n\n"
-            f"Referenced sample backlog items: {related}.\n"
-            "Review note: confirm each story has independent value, clear acceptance criteria, and manageable size."
+    def _decompose_epic(
+        self,
+        user_input: str,
+        product_context: dict[str, Any],
+        backlog_items: list[dict[str, Any]],
+    ) -> EpicDecompositionOutput:
+        lower = user_input.lower()
+        is_procurement = any(term in lower for term in ["purchase order", "procurement", "supplier", "vendor"])
+        is_vague = self._is_vague_input(user_input)
+        personas = self._epic_personas(lower)
+        epic_summary = self._summarize_epic(user_input, product_context)
+        stories = self._build_decomposed_stories(personas, is_procurement, is_vague)
+        release_slices = [
+            ReleaseSlice(
+                name="MVP",
+                stories=["US-1", "US-2", "US-3"],
+                rationale="Delivers the core submit, review, and decision workflow needed to validate the product value.",
+            ),
+            ReleaseSlice(
+                name="Later enhancement",
+                stories=["US-4"],
+                rationale="Adds proactive visibility after the core approval path is proven.",
+            ),
+            ReleaseSlice(
+                name="Operational/admin",
+                stories=["US-5"],
+                rationale="Gives administrators control over thresholds and routing rules after MVP behavior is stable.",
+            ),
+        ]
+        if len(stories) > 5:
+            release_slices.append(
+                ReleaseSlice(
+                    name="Compliance hardening",
+                    stories=["US-6"],
+                    rationale="Captures audit and exception reporting once the end-to-end workflow is understood.",
+                )
+            )
+
+        open_questions = self._build_epic_open_questions(lower, is_vague)
+        assumption_heavy = is_vague or len(open_questions) >= 3
+        compliance_or_approval = any(term in lower for term in ["approval", "approve", "compliance", "security", "procurement"])
+        human_review_required = assumption_heavy or compliance_or_approval
+        review_reason = (
+            "Human review is required because the epic includes approval or procurement workflow decisions and unresolved assumptions."
+            if human_review_required
+            else "The epic is decomposed with low ambiguity, but Product Owner review is still recommended before backlog commitment."
+        )
+        return EpicDecompositionOutput(
+            epic_summary=epic_summary,
+            decomposed_user_stories=stories,
+            release_slices=release_slices,
+            open_questions=open_questions,
+            human_review_required=human_review_required,
+            review_reason=review_reason,
         )
 
-    def _check_dor(self, user_input: str) -> str:
+    def _epic_personas(self, lower_text: str) -> dict[str, str]:
+        if "procurement" in lower_text or "purchase order" in lower_text:
+            return {
+                "requester": "procurement requester",
+                "approver": "finance manager",
+                "admin": "procurement administrator",
+                "observer": "enterprise procurement lead",
+            }
+        return {
+            "requester": "business user",
+            "approver": "workflow approver",
+            "admin": "system administrator",
+            "observer": "Product Owner",
+        }
+
+    def _summarize_epic(self, user_input: str, product_context: dict[str, Any]) -> str:
+        target_user = product_context.get("target_user", "Technical Product Owner")
         return (
-            f"Definition of Ready check:\n{user_input}\n\n"
-            "Ready signals:\n"
-            "- User or stakeholder is identifiable.\n"
-            "- Desired outcome is stated.\n"
-            "- Acceptance criteria can be tested.\n\n"
-            "Gaps to review:\n"
-            "- Confirm dependencies and edge cases.\n"
-            "- Add sizing notes if the team will estimate this soon.\n"
-            "- Validate that success metrics or expected business value are explicit.\n\n"
-            "Recommendation: human review required before sprint commitment."
+            f"Decompose '{self._clean_phrase(user_input)}' into sprint-sized stories for a {target_user}, "
+            "with emphasis on business value, workflow clarity, and review checkpoints."
         )
+
+    def _build_decomposed_stories(
+        self,
+        personas: dict[str, str],
+        is_procurement: bool,
+        is_vague: bool,
+    ) -> list[DecomposedUserStory]:
+        domain_object = "purchase order" if is_procurement else "request"
+        stories = [
+            self._story(
+                story_id="US-1",
+                title=f"Submit {domain_object} for approval",
+                persona=personas["requester"],
+                goal=f"to submit a {domain_object} with required details",
+                value="approval can begin with complete and consistent information",
+                priority="High",
+                complexity="M",
+                dependencies=["Required fields and validation rules", "Requester permissions"],
+                risks=["Incomplete submission rules may create rework"],
+            ),
+            self._story(
+                story_id="US-2",
+                title=f"Review and decide on {domain_object}",
+                persona=personas["approver"],
+                goal=f"to approve, reject, or request changes for a {domain_object}",
+                value="spend decisions are controlled before commitment",
+                priority="High",
+                complexity="M",
+                dependencies=["Approval policy", "Decision states", "Approver assignment"],
+                risks=["Approval thresholds may differ by department or amount"],
+            ),
+            self._story(
+                story_id="US-3",
+                title="Track workflow status",
+                persona=personas["requester"],
+                goal=f"to see the current status of my {domain_object}",
+                value="I know whether action is needed and can plan follow-up",
+                priority="High",
+                complexity="S",
+                dependencies=["Workflow state model", "Notification rules"],
+                risks=["Status labels may be interpreted differently across teams"],
+            ),
+            self._story(
+                story_id="US-4",
+                title="Notify stakeholders about delays and decisions",
+                persona=personas["observer"],
+                goal=f"to receive notifications when a {domain_object} is delayed or decided",
+                value="teams can respond before procurement risk affects delivery",
+                priority="Medium",
+                complexity="M",
+                dependencies=["Notification channels", "Delay thresholds", "Recipient rules"],
+                risks=["Too many notifications may reduce trust in the workflow"],
+            ),
+            self._story(
+                story_id="US-5",
+                title="Configure approval rules",
+                persona=personas["admin"],
+                goal="to configure approvers, thresholds, and escalation paths",
+                value="the workflow can reflect enterprise policy without code changes",
+                priority="Medium",
+                complexity="L",
+                dependencies=["Role model", "Policy ownership", "Audit requirements"],
+                risks=["Rule complexity may make the MVP too large"],
+            ),
+        ]
+        if is_vague:
+            stories.append(
+                self._story(
+                    story_id="US-6",
+                    title="Capture workflow assumptions for review",
+                    persona="Product Owner",
+                    goal="to document unresolved workflow assumptions",
+                    value="stakeholders can validate scope before delivery starts",
+                    priority="High",
+                    complexity="S",
+                    dependencies=["Stakeholder availability", "Discovery notes"],
+                    risks=["Unvalidated assumptions may create churn during refinement"],
+                    force_review_note="Assumption-heavy story should be refined before sprint planning.",
+                )
+            )
+        return stories
+
+    def _story(
+        self,
+        story_id: str,
+        title: str,
+        persona: str,
+        goal: str,
+        value: str,
+        priority: str,
+        complexity: str,
+        dependencies: list[str],
+        risks: list[str],
+        force_review_note: str | None = None,
+    ) -> DecomposedUserStory:
+        invest_notes = [
+            "Story has a distinct persona and outcome.",
+            "Acceptance criteria preview makes behavior testable.",
+        ]
+        small = complexity != "L"
+        if not small:
+            invest_notes.append("Large complexity suggests this may need further splitting.")
+        if force_review_note:
+            invest_notes.append(force_review_note)
+
+        return DecomposedUserStory(
+            id=story_id,
+            title=title,
+            user_story=f"As a {persona}, I want {goal}, so that {value}.",
+            persona=persona,
+            goal=goal,
+            business_value=value,
+            acceptance_criteria_preview=[
+                f"Given a {persona} has access, When they start this story workflow, Then the system shows the required action.",
+                "Given valid information is provided, When the user submits, Then the system records the outcome and updates status.",
+                "Given information is missing or invalid, When the user attempts to continue, Then the system explains what must be corrected.",
+            ],
+            priority=priority,  # type: ignore[arg-type]
+            estimated_complexity=complexity,  # type: ignore[arg-type]
+            dependencies=dependencies,
+            risks=risks,
+            invest_check=InvestCheck(
+                independent=True,
+                negotiable=True,
+                valuable=True,
+                estimable=bool(dependencies),
+                small=small,
+                testable=True,
+                notes=invest_notes,
+            ),
+        )
+
+    def _build_epic_open_questions(self, lower_text: str, is_vague: bool) -> list[str]:
+        questions: list[str] = []
+        if is_vague:
+            questions.append("Which persona and workflow should be prioritized for the first release?")
+            questions.append("What measurable business outcome defines a better experience?")
+        if "approval" in lower_text or "approve" in lower_text:
+            questions.append("What approval thresholds, escalation paths, and delegated approver rules are required?")
+        if "procurement" in lower_text or "purchase order" in lower_text:
+            questions.append("Which procurement systems or supplier records does the workflow depend on?")
+        questions.append("Which audit, compliance, or reporting obligations must be met before production use?")
+        return questions[:5]
+
+    def _is_vague_input(self, user_input: str) -> bool:
+        lower = user_input.lower()
+        vague_terms = ["improve", "better", "experience", "optimize", "modernize"]
+        return len(user_input.split()) < 7 or any(term in lower for term in vague_terms)
+
+    def _check_dor(self, user_input: str) -> DORCheckOutput:
+        lower = user_input.lower()
+        story = self._parse_or_rewrite_story(user_input)
+        checks = [
+            (
+                "User persona defined",
+                bool(story["explicit_role"]),
+                "The item names the user or stakeholder who receives value.",
+                "Add the primary user persona using 'As a [persona]'.",
+            ),
+            (
+                "Goal defined",
+                bool(story["goal"]) and len(str(story["goal"]).split()) >= 3,
+                "The desired action or outcome is understandable.",
+                "Clarify the workflow, action, or capability the user needs.",
+            ),
+            (
+                "Business value defined",
+                bool(story["explicit_benefit"]),
+                "The item explains why the outcome matters.",
+                "Add the benefit using 'so that [business value]'.",
+            ),
+            (
+                "Acceptance criteria present",
+                any(term in lower for term in ["given", "when", "then", "acceptance criteria", "ac-"]),
+                "Acceptance criteria or test examples are included.",
+                "Add 3 to 5 Given/When/Then acceptance criteria.",
+            ),
+            (
+                "Dependencies mentioned",
+                any(term in lower for term in ["depends", "dependency", "integrates", "system", "api", "approval", "procurement"]),
+                "The item mentions relevant dependencies or workflow relationships.",
+                "Identify upstream systems, roles, policies, or data dependencies.",
+            ),
+            (
+                "Edge cases considered",
+                any(term in lower for term in ["edge", "invalid", "missing", "exception", "error", "reject"]),
+                "The item considers alternate or failure paths.",
+                "Document invalid, missing, duplicate, and exception scenarios.",
+            ),
+            (
+                "Non-functional needs mentioned",
+                any(term in lower for term in ["performance", "security", "audit", "compliance", "accessibility", "latency"]),
+                "The item names at least one non-functional concern.",
+                "Add auditability, security, performance, or accessibility expectations.",
+            ),
+            (
+                "Testability is clear",
+                any(term in lower for term in ["approve", "reject", "reset", "receive", "notify", "submit", "track", "view"]),
+                "The behavior can be verified through observable outcomes.",
+                "Make the expected system behavior observable and testable.",
+            ),
+            (
+                "Scope is small enough",
+                len(user_input.split()) <= 35 and not any(term in lower for term in ["system", "platform", "experience", "end-to-end"]),
+                "The item appears small enough for refinement.",
+                "Split broad platform or experience work into smaller stories.",
+            ),
+            (
+                "Ambiguity is low",
+                not self._is_vague_input(user_input),
+                "The wording is specific enough for team discussion.",
+                "Replace vague wording with concrete actors, triggers, rules, and outcomes.",
+            ),
+        ]
+
+        passed = [
+            DORPassedCheck(check=label, reason=passed_reason)
+            for label, result, passed_reason, _ in checks
+            if result
+        ]
+        failed = [
+            DORFailedCheck(check=label, reason="This readiness signal is missing or weak.", recommendation=recommendation)
+            for label, result, _, recommendation in checks
+            if not result
+        ]
+        dor_score = round((len(passed) / len(checks)) * 100)
+        if dor_score >= 80:
+            status = "Ready"
+        elif dor_score >= 50:
+            status = "Needs Refinement"
+        else:
+            status = "Not Ready"
+
+        risk_flags = self._dor_risk_flags(lower, failed)
+        recommended_next_actions = [item.recommendation for item in failed[:4]]
+        if not recommended_next_actions:
+            recommended_next_actions.append("Review with the delivery team and confirm estimates before sprint commitment.")
+
+        human_review_required = status != "Ready" or bool(risk_flags)
+        if human_review_required:
+            review_reason = (
+                f"Human review required because the item status is {status} with "
+                f"{len(failed)} readiness gap(s) and {len(risk_flags)} risk flag(s)."
+            )
+        else:
+            review_reason = "No major DoR gaps detected by the mock checks; Product Owner review is still recommended."
+
+        return DORCheckOutput(
+            item_summary=self._clean_phrase(user_input),
+            dor_score=dor_score,
+            status=status,  # type: ignore[arg-type]
+            passed_checks=passed,
+            failed_checks=failed,
+            risk_flags=risk_flags,
+            recommended_next_actions=recommended_next_actions,
+            human_review_required=human_review_required,
+            review_reason=review_reason,
+        )
+
+    def _dor_risk_flags(self, lower_text: str, failed: list[DORFailedCheck]) -> list[str]:
+        flags: list[str] = []
+        if any(term in lower_text for term in ["approval", "approve", "procurement", "finance"]):
+            flags.append("Approval or finance workflow may require policy and audit validation.")
+        if any(term in lower_text for term in ["security", "compliance", "audit"]):
+            flags.append("Compliance-sensitive requirements should be reviewed before implementation.")
+        if any(item.check == "Scope is small enough" for item in failed):
+            flags.append("Scope may be too broad for a single sprint-ready story.")
+        if any(item.check == "Ambiguity is low" for item in failed):
+            flags.append("Ambiguous wording may cause delivery churn during refinement.")
+        return flags

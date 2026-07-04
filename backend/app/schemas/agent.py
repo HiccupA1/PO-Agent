@@ -50,9 +50,72 @@ class AcceptanceCriteriaOutput(BaseModel):
     review_reason: str
 
 
+class InvestCheck(BaseModel):
+    independent: bool
+    negotiable: bool
+    valuable: bool
+    estimable: bool
+    small: bool
+    testable: bool
+    notes: list[str]
+
+
+class DecomposedUserStory(BaseModel):
+    id: str
+    title: str
+    user_story: str
+    persona: str
+    goal: str
+    business_value: str
+    acceptance_criteria_preview: list[str]
+    priority: Literal["High", "Medium", "Low"]
+    estimated_complexity: Literal["S", "M", "L"]
+    dependencies: list[str]
+    risks: list[str]
+    invest_check: InvestCheck
+
+
+class ReleaseSlice(BaseModel):
+    name: str
+    stories: list[str]
+    rationale: str
+
+
+class EpicDecompositionOutput(BaseModel):
+    epic_summary: str
+    decomposed_user_stories: list[DecomposedUserStory]
+    release_slices: list[ReleaseSlice]
+    open_questions: list[str]
+    human_review_required: bool
+    review_reason: str
+
+
+class DORPassedCheck(BaseModel):
+    check: str
+    reason: str
+
+
+class DORFailedCheck(BaseModel):
+    check: str
+    reason: str
+    recommendation: str
+
+
+class DORCheckOutput(BaseModel):
+    item_summary: str
+    dor_score: int
+    status: Literal["Ready", "Needs Refinement", "Not Ready"]
+    passed_checks: list[DORPassedCheck]
+    failed_checks: list[DORFailedCheck]
+    risk_flags: list[str]
+    recommended_next_actions: list[str]
+    human_review_required: bool
+    review_reason: str
+
+
 class AgentRunResponse(BaseModel):
     task: AgentTask
-    final_output: str | AcceptanceCriteriaOutput
+    final_output: str | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput
     trace: list[TraceStep]
     human_review_required: bool
     review_reason: str | None = None

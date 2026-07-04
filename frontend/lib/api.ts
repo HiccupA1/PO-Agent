@@ -37,9 +37,72 @@ export type AcceptanceCriteriaOutput = {
   review_reason: string;
 };
 
+export type InvestCheck = {
+  independent: boolean;
+  negotiable: boolean;
+  valuable: boolean;
+  estimable: boolean;
+  small: boolean;
+  testable: boolean;
+  notes: string[];
+};
+
+export type DecomposedUserStory = {
+  id: string;
+  title: string;
+  user_story: string;
+  persona: string;
+  goal: string;
+  business_value: string;
+  acceptance_criteria_preview: string[];
+  priority: "High" | "Medium" | "Low";
+  estimated_complexity: "S" | "M" | "L";
+  dependencies: string[];
+  risks: string[];
+  invest_check: InvestCheck;
+};
+
+export type ReleaseSlice = {
+  name: string;
+  stories: string[];
+  rationale: string;
+};
+
+export type EpicDecompositionOutput = {
+  epic_summary: string;
+  decomposed_user_stories: DecomposedUserStory[];
+  release_slices: ReleaseSlice[];
+  open_questions: string[];
+  human_review_required: boolean;
+  review_reason: string;
+};
+
+export type DORPassedCheck = {
+  check: string;
+  reason: string;
+};
+
+export type DORFailedCheck = {
+  check: string;
+  reason: string;
+  recommendation: string;
+};
+
+export type DORCheckOutput = {
+  item_summary: string;
+  dor_score: number;
+  status: "Ready" | "Needs Refinement" | "Not Ready";
+  passed_checks: DORPassedCheck[];
+  failed_checks: DORFailedCheck[];
+  risk_flags: string[];
+  recommended_next_actions: string[];
+  human_review_required: boolean;
+  review_reason: string;
+};
+
 export type AgentResponse = {
   task: AgentTask;
-  final_output: string | AcceptanceCriteriaOutput;
+  final_output: string | AcceptanceCriteriaOutput | EpicDecompositionOutput | DORCheckOutput;
   trace: TraceEvent[];
   human_review_required: boolean;
   review_reason?: string | null;

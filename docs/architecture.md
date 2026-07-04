@@ -30,6 +30,30 @@ For `draft_acceptance_criteria`, the agent now follows a clearer workflow:
 6. Evaluate Definition of Ready readiness with deterministic scoring rules.
 7. Flag a human review checkpoint and record an audit summary.
 
+## Phase 2 Epic Decomposition Flow
+
+For `decompose_epic`, the agent now mimics a Product Owner refinement workflow:
+
+1. Plan the decomposition task.
+2. Parse the epic for intent, vagueness, and approval/compliance signals.
+3. Load product context through the mock SharePoint tool.
+4. Check related sample backlog items through the mock Jira tool.
+5. Identify likely personas, workflow roles, and approval touchpoints.
+6. Decompose the epic into INVEST-style user stories.
+7. Run INVEST checks for each story.
+8. Create release slices for MVP, later enhancement, and operational/admin work.
+9. Flag human review for assumptions, dependencies, and policy decisions.
+
+## Phase 2 Definition of Ready Flow
+
+For `check_dor`, the agent evaluates whether a backlog item is ready for sprint planning:
+
+1. Parse the item for persona, goal, value, acceptance criteria, dependencies, edge cases, non-functional needs, testability, scope, and ambiguity.
+2. Score the item from 0 to 100.
+3. Classify it as Ready, Needs Refinement, or Not Ready.
+4. Return passed checks, failed checks, risk flags, and next actions.
+5. Add a human review checkpoint when readiness is incomplete or risk is present.
+
 ## MCP-Style Mock Tools
 
 The backend defines a minimal `MCPTool` interface with a `run` method. Each mock tool follows that shape:
@@ -38,11 +62,15 @@ The backend defines a minimal `MCPTool` interface with a `run` method. Each mock
 - `MockSharePointTool` returns sample product context.
 - `MockAuditLogTool` records run summaries in memory and a gitignored `local_data/audit_log.json` file.
 
-These tools are intentionally local and deterministic so the project can run without paid APIs.
+In Phase 2, these tools make the local demo feel like an enterprise workflow without needing paid APIs or real system access. Jira stands in for related backlog context, SharePoint stands in for product context, and audit logging stands in for governance and observability.
 
 ## Why This Is Agentic
 
-The product is agentic because the backend does more than transform text in a single step. It plans the task, calls mock tools for context, evaluates readiness, produces structured backlog artifacts, records observable trace steps, and flags human review before the output can be treated as delivery-ready.
+The product is agentic because the backend does more than transform text in a single step. It plans the task, calls mock tools for context, evaluates readiness and INVEST quality, produces structured backlog artifacts, records observable trace steps, and flags human review before the output can be treated as delivery-ready.
+
+## Why Traceability Matters
+
+Enterprise AI workflows need more than a final answer. Product Owners, delivery leads, and governance reviewers need to see which task was selected, which tools were used, which checks passed or failed, and why human review was requested. The trace panel demonstrates that observable chain of work in a simple local form.
 
 ## Human-In-The-Loop Checkpoint
 

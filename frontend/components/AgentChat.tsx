@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 
-import type { AcceptanceCriteriaOutput, AgentResponse, AgentTask } from "../lib/api";
+import type {
+  AcceptanceCriteriaOutput,
+  AgentResponse,
+  AgentTask,
+  DORCheckOutput,
+  EpicDecompositionOutput,
+  InvestCheck
+} from "../lib/api";
 import { runAgent } from "../lib/api";
 import { TracePanel } from "./TracePanel";
 
@@ -15,13 +22,26 @@ const taskOptions: AgentTask[] = [
 const sampleInputs = [
   "As a customer, I want to reset my password so that I can regain access to my account.",
   "Build invoice approval flow for finance team.",
-  "Users should receive notifications when purchase orders are delayed."
+  "Users should receive notifications when purchase orders are delayed.",
+  "Build purchase order approval system for enterprise procurement teams.",
+  "Improve procurement experience.",
+  "As a finance manager, I want to approve or reject purchase orders so that procurement spend is controlled."
 ];
 
 function isAcceptanceCriteriaOutput(
   output: AgentResponse["final_output"]
 ): output is AcceptanceCriteriaOutput {
   return typeof output !== "string" && "acceptance_criteria" in output;
+}
+
+function isEpicDecompositionOutput(
+  output: AgentResponse["final_output"]
+): output is EpicDecompositionOutput {
+  return typeof output !== "string" && "decomposed_user_stories" in output;
+}
+
+function isDORCheckOutput(output: AgentResponse["final_output"]): output is DORCheckOutput {
+  return typeof output !== "string" && "dor_score" in output;
 }
 
 export function AgentChat() {
@@ -53,6 +73,14 @@ export function AgentChat() {
     }
 
     if (!isAcceptanceCriteriaOutput(result.final_output)) {
+      if (isEpicDecompositionOutput(result.final_output)) {
+        return <EpicDecompositionView output={result.final_output} />;
+      }
+
+      if (isDORCheckOutput(result.final_output)) {
+        return <DORCheckView output={result.final_output} />;
+      }
+
       return (
         <>
           <pre>{result.final_output}</pre>
@@ -203,6 +231,159 @@ function OutputList({ title, items }: { title: string; items: string[] }) {
           <li key={item}>{item}</li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function EpicDecompositionView({ output }: { output: EpicDecompositionOutput }) {
+  return (
+    <div className="structured-output">
+      <div className="story-block">
+        <h3>Epic Summary</h3>
+        <p>{output.epic_summary}</p>
+      </div>
+
+      <ReviewBanner required={output.human_review_required} reason={output.review_reason} />
+
+      <section>
+        <h3>User Stories</h3>
+        <div className="story-card-list">
+          {output.decomposed_user_stories.map((story) => (
+            <article className="story-card" key={story.id}>
+              <div className="story-card-header">
+                <div>
+                  <strong>
+                    {story.id}: {story.title}
+                  </strong>
+                  <p>{story.user_story}</p>
+                </div>
+                <div className="badge-row">
+                  <span className="badge">{story.priority}</span>
+                  <span className="badge">Size {story.estimated_complexity}</span>
+                </div>
+              </div>
+
+              <div className="detail-grid">
+                <div>
+                  <small>Persona</small>
+                  <p>{story.persona}</p>
+                </div>
+                <div>
+                  <small>Business Value</small>
+                  <p>{story.business_value}</p>
+                </div>
+              </div>
+
+              <OutputList title="Acceptance Criteria Preview" items={story.acceptance_criteria_preview} />
+              <OutputList title="Dependencies" items={story.dependencies} />
+              <OutputList title="Risks" items={story.risks} />
+              <InvestChecklist invest={story.invest_check} />
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h3>Release Slices</h3>
+        <div className="slice-list">
+          {output.release_slices.map((slice) => (
+            <article className="slice-card" key={slice.name}>
+              <strong>{slice.name}</strong>
+              <p>{slice.rationale}</p>
+              <small>{slice.stories.join(", ")}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <OutputList title="Open Questions" items={output.open_questions} />
+    </div>
+  );
+}
+
+function DORCheckView({ output }: { output: DORCheckOutput }) {
+  return (
+    <div className="structured-output">
+      <div className="story-block">
+        <h3>Item Summary</h3>
+        <p>{output.item_summary}</p>
+      </div>
+
+      <ReviewBanner required={output.human_review_required} reason={output.review_reason} />
+
+      <div className="dor-block">
+        <div className="dor-score-row">
+          <div>
+            <h3>Definition of Ready</h3>
+            <p className="score">{output.dor_score}%</p>
+          </div>
+          <span className={`status-badge status-${output.status.toLowerCase().replace(" ", "-")}`}>
+            {output.status}
+          </span>
+        </div>
+      </div>
+
+      <section>
+        <h3>Passed Checks</h3>
+        <div className="check-list">
+          {output.passed_checks.map((item) => (
+            <article className="check-card passed" key={item.check}>
+              <strong>{item.check}</strong>
+              <p>{item.reason}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h3>Failed Checks</h3>
+        <div className="check-list">
+          {output.failed_checks.map((item) => (
+            <article className="check-card failed" key={item.check}>
+              <strong>{item.check}</strong>
+              <p>{item.reason}</p>
+              <small>{item.recommendation}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <OutputList title="Risk Flags" items={output.risk_flags} />
+      <OutputList title="Recommended Next Actions" items={output.recommended_next_actions} />
+    </div>
+  );
+}
+
+function ReviewBanner({ required, reason }: { required: boolean; reason: string }) {
+  return (
+    <div className="review-banner">
+      <span>{required ? "Review Required" : "Review Optional"}</span>
+      <p>{reason}</p>
+    </div>
+  );
+}
+
+function InvestChecklist({ invest }: { invest: InvestCheck }) {
+  const checks = [
+    { label: "Independent", passed: invest.independent },
+    { label: "Negotiable", passed: invest.negotiable },
+    { label: "Valuable", passed: invest.valuable },
+    { label: "Estimable", passed: invest.estimable },
+    { label: "Small", passed: invest.small },
+    { label: "Testable", passed: invest.testable }
+  ];
+
+  return (
+    <section>
+      <h3>INVEST Check</h3>
+      <div className="invest-grid">
+        {checks.map((check) => (
+          <span className={check.passed ? "invest-pass" : "invest-warn"} key={check.label}>
+            {check.label}
+          </span>
+        ))}
+      </div>
+      <OutputList title="INVEST Notes" items={invest.notes} />
     </section>
   );
 }

@@ -12,7 +12,7 @@ Technical Product Owners often spend too much time during sprint-zero and backlo
 
 ## Current Phase
 
-Phase 1: Acceptance Criteria Drafting Agent is implemented with structured output, rule-based Definition of Ready scoring, traceable mock tool use, and a human review checkpoint. No paid APIs, real LLM calls, authentication, or database are required yet.
+Phase 2: Epic Decomposition + Definition of Ready Agent is implemented. The app now supports structured acceptance criteria drafting, epic decomposition into INVEST-style user stories, release slicing, structured DoR checks, traceable mock tool use, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required yet.
 
 ## Planned Stack
 
@@ -56,12 +56,13 @@ By default, the frontend expects the backend at `http://localhost:8000`.
 - Rewrite raw feature descriptions into user story format
 - Generate edge cases, non-functional requirements, assumptions, and clarification questions
 - Score Definition of Ready readiness
-- Decompose an epic into mock INVEST-style stories
-- Check Definition of Ready readiness
+- Decompose an epic into 4 to 6 INVEST-style user stories
+- Generate release slices for MVP, later enhancements, and operational/admin work
+- Check Definition of Ready with structured pass/fail analysis and recommendations
 - Return observable agent trace steps
 - Show a local backlog preview
 
-## Example
+## Example Acceptance Criteria Input
 
 Input:
 
@@ -82,11 +83,42 @@ Output summary:
 - Definition of Ready score
 - Human review reason and checkpoint
 
+## Example Epic Demo Flow
+
+1. Enter a vague epic such as `Improve procurement experience.`
+2. The agent identifies likely personas and workflow assumptions.
+3. The agent decomposes the epic into INVEST-style stories.
+4. The agent checks each story for independence, value, size, and testability.
+5. The agent creates release slices for MVP, later enhancement, and operational/admin work.
+6. The agent flags human review for unresolved assumptions and enterprise workflow decisions.
+
+## Example DoR Check
+
+Input:
+
+```json
+{
+  "task": "check_dor",
+  "input": "As a finance manager, I want to approve or reject purchase orders so that procurement spend is controlled.",
+  "context": {}
+}
+```
+
+Output summary:
+
+- DoR score and Ready / Needs Refinement / Not Ready status
+- Passed readiness checks
+- Failed checks with recommendations
+- Risk flags and recommended next actions
+- Human review reason
+
 ## Future Integrations
 
 - Real LLM-backed reasoning
 - Jira MCP tool integration
 - Microsoft Graph, Teams, and SharePoint MCP tools
 - Backlog scoring and prioritization
+- Real MCP-style integration layer
 - Persistent audit logging
+- Claude Agent SDK or real LLM adapter
 - Human-in-the-loop approval workflows
