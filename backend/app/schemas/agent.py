@@ -16,15 +16,46 @@ class AgentRunRequest(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict)
 
 
-class TraceEvent(BaseModel):
+class TraceStep(BaseModel):
     step: int
     type: str
     message: str
     tool_name: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class AcceptanceCriteriaItem(BaseModel):
+    id: str
+    title: str
+    given: str
+    when: str
+    then: str
+
+
+class DefinitionOfReadyResult(BaseModel):
+    score: int
+    passed: list[str]
+    failed: list[str]
+
+
+class AcceptanceCriteriaOutput(BaseModel):
+    rewritten_user_story: str
+    acceptance_criteria: list[AcceptanceCriteriaItem]
+    edge_cases: list[str]
+    non_functional_requirements: list[str]
+    assumptions: list[str]
+    clarification_questions: list[str]
+    definition_of_ready: DefinitionOfReadyResult
+    human_review_required: bool
+    review_reason: str
 
 
 class AgentRunResponse(BaseModel):
     task: AgentTask
-    final_output: str
-    trace: list[TraceEvent]
+    final_output: str | AcceptanceCriteriaOutput
+    trace: list[TraceStep]
     human_review_required: bool
+    review_reason: str | None = None
+
+
+TraceEvent = TraceStep

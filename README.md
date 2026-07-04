@@ -12,7 +12,7 @@ Technical Product Owners often spend too much time during sprint-zero and backlo
 
 ## Current Phase
 
-Phase 0: foundational scaffold and mock agent behavior. No paid APIs, real LLM calls, authentication, or database are required yet.
+Phase 1: Acceptance Criteria Drafting Agent is implemented with structured output, rule-based Definition of Ready scoring, traceable mock tool use, and a human review checkpoint. No paid APIs, real LLM calls, authentication, or database are required yet.
 
 ## Planned Stack
 
@@ -30,7 +30,7 @@ Phase 0: foundational scaffold and mock agent behavior. No paid APIs, real LLM c
 ```powershell
 cd backend
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
@@ -52,11 +52,35 @@ By default, the frontend expects the backend at `http://localhost:8000`.
 
 ## What Works Now
 
-- Draft acceptance criteria from a story or note
+- Draft structured acceptance criteria from a story or feature note
+- Rewrite raw feature descriptions into user story format
+- Generate edge cases, non-functional requirements, assumptions, and clarification questions
+- Score Definition of Ready readiness
 - Decompose an epic into mock INVEST-style stories
 - Check Definition of Ready readiness
 - Return observable agent trace steps
 - Show a local backlog preview
+
+## Example
+
+Input:
+
+```json
+{
+  "task": "draft_acceptance_criteria",
+  "input": "Build invoice approval flow for finance team.",
+  "context": {}
+}
+```
+
+Output summary:
+
+- Rewritten user story for a finance approver
+- 4 to 5 Given/When/Then acceptance criteria
+- Invoice approval edge cases
+- Auditability and performance non-functional requirements
+- Definition of Ready score
+- Human review reason and checkpoint
 
 ## Future Integrations
 

@@ -1,12 +1,21 @@
 # Build Plan
 
-## Phase 0: Scaffold and Mock Agent
+## Phase 0: Scaffold and Mock Agent - Complete
 
-Create the local full-stack scaffold, deterministic agent workflow, mock tools, trace output, and sample data.
+Created the local full-stack scaffold, deterministic agent workflow, mock tools, trace output, and sample data.
 
-## Phase 1: Acceptance Criteria Drafting
+## Phase 1: Acceptance Criteria Drafting - Implemented
 
-Improve acceptance criteria quality, add templates, and support multiple story types.
+Implemented structured acceptance criteria drafting for `draft_acceptance_criteria`.
+
+Current capabilities:
+
+- Rewrites raw feature descriptions into user story format
+- Generates Given/When/Then acceptance criteria
+- Adds edge cases, non-functional requirements, assumptions, and clarification questions
+- Scores Definition of Ready readiness
+- Shows agent trace steps for planning, mock tool calls, evaluation, output, and human review
+- Records lightweight audit summaries locally
 
 ## Phase 2: Epic Decomposition and DoR Checks
 
