@@ -1,0 +1,10 @@
+{
+  "product_name": "PO Agent",
+  "target_user": "Technical Product Owner",
+  "business_goal": "Reduce time spent turning messy product context into sprint-ready backlog artifacts.",
+  "constraints": [
+    "No paid APIs in phase 0",
+    "Human review required before backlog changes",
+    "Mock local tools only"
+  ]
+}

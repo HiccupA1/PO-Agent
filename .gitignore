@@ -1,15 +1,18 @@
 .env
+.env.local
 .venv/
 __pycache__/
+*.pyc
 node_modules/
 .next/
 dist/
 build/
 .DS_Store
 
-# Local uploads
+# Local uploads and data
 uploads/
 local_uploads/
+local_data/
 
 # Generated vector stores
 vectorstores/
@@ -20,3 +23,4 @@ vector_stores/
 tmp/
 temp/
 data/tmp/
+logs/

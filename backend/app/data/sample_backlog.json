@@ -1,0 +1,23 @@
+[
+  {
+    "id": "POA-101",
+    "title": "Draft acceptance criteria from a raw user story",
+    "type": "Story",
+    "status": "Ready for refinement",
+    "priority": "High"
+  },
+  {
+    "id": "POA-102",
+    "title": "Decompose a customer onboarding epic",
+    "type": "Epic",
+    "status": "Discovery",
+    "priority": "Medium"
+  },
+  {
+    "id": "POA-103",
+    "title": "Check backlog item readiness before sprint planning",
+    "type": "Task",
+    "status": "Draft",
+    "priority": "Medium"
+  }
+]
