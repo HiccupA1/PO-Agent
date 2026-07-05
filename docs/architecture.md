@@ -100,6 +100,22 @@ The mock tools make the local demo feel like an enterprise workflow without need
 
 This is useful for interviews because it shows that tools are discoverable, typed, and executable through a common layer instead of being hidden helper functions.
 
+## LLM Provider Architecture
+
+Phase 5 adds an LLM adapter layer under `backend/app/llm`.
+
+Components:
+
+- `LLMProvider` defines `generate_structured_output`.
+- `MockLLMProvider` returns deterministic structured output and always works locally.
+- `OpenAICompatibleProvider` supports an optional OpenAI-compatible chat completion endpoint using environment variables.
+- `provider_factory` selects mock or LLM-assisted mode.
+- `json_guard` parses, validates, and rejects malformed provider output before it can affect the agent response.
+
+The agent still builds deterministic baseline artifacts first. If LLM-assisted mode is requested, the agent builds a prompt and context from user input plus MCP-style tool results, attempts provider generation, validates the response, and falls back to the baseline if anything fails.
+
+This keeps the MCP tool layer and LLM layer separate: tools provide structured context, while the LLM adapter may optionally enhance the final Product Owner artifact.
+
 ## Why This Is Agentic
 
 The product is agentic because the backend does more than transform text in a single step. It plans the task, selects tools through a registry, calls mock tools for context, evaluates readiness and INVEST quality, produces structured backlog artifacts, records observable trace steps, and flags human review before the output can be treated as delivery-ready.

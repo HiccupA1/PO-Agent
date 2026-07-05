@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type {
   AcceptanceCriteriaOutput,
+  AgentRuntimeMetadata,
   AgentResponse,
   AgentTask,
   DORCheckOutput,
   EpicDecompositionOutput,
   InvestCheck,
-  PrioritizationOutput
+  LLMStatus,
+  PrioritizationOutput,
+  RuntimeMode
 } from "../lib/api";
-import { runAgent } from "../lib/api";
+import { getLLMStatus, runAgent } from "../lib/api";
 import { TracePanel } from "./TracePanel";
 
 const taskOptions: AgentTask[] = [
@@ -61,13 +64,21 @@ export function AgentChat() {
   const [result, setResult] = useState<AgentResponse | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>("mock");
+  const [llmStatus, setLlmStatus] = useState<LLMStatus | null>(null);
+
+  useEffect(() => {
+    getLLMStatus()
+      .then(setLlmStatus)
+      .catch(() => setLlmStatus(null));
+  }, []);
 
   async function handleRun() {
     setIsRunning(true);
     setError(null);
 
     try {
-      const response = await runAgent(task, input);
+      const response = await runAgent(task, input, runtimeMode);
       setResult(response);
     } catch {
       setError("Could not reach the backend. Confirm FastAPI is running on port 8000.");
@@ -176,6 +187,29 @@ export function AgentChat() {
   return (
     <div className="agent-grid">
       <section className="panel control-panel">
+        <div className="runtime-panel">
+          <h2>Runtime</h2>
+          <p className="muted">
+            Mock mode is deterministic and local. LLM-assisted mode attempts a provider call and falls back safely.
+          </p>
+          <label htmlFor="runtime">Mode</label>
+          <select
+            id="runtime"
+            value={runtimeMode}
+            onChange={(event) => setRuntimeMode(event.target.value as RuntimeMode)}
+          >
+            <option value="mock">mock</option>
+            <option value="llm">llm-assisted</option>
+          </select>
+          {llmStatus ? (
+            <small>
+              {llmStatus.message} Provider: {llmStatus.provider || "mock"}
+            </small>
+          ) : (
+            <small>LLM status unavailable until the backend is running.</small>
+          )}
+        </div>
+
         <label htmlFor="task">Task</label>
         <select
           id="task"
@@ -223,10 +257,23 @@ export function AgentChat() {
 
       <section className="panel output-panel">
         <h2>Output</h2>
+        {result ? <RuntimeMetadataView runtime={result.runtime} /> : null}
         {renderOutput()}
       </section>
 
       <TracePanel trace={result?.trace ?? []} />
+    </div>
+  );
+}
+
+function RuntimeMetadataView({ runtime }: { runtime: AgentRuntimeMetadata }) {
+  return (
+    <div className="runtime-result">
+      <span>Requested: {runtime.mode_requested}</span>
+      <span>Used: {runtime.mode_used}</span>
+      <span>Provider: {runtime.provider}</span>
+      <span>Fallback: {runtime.fallback_used ? "Yes" : "No"}</span>
+      {runtime.fallback_reason ? <span>{runtime.fallback_reason}</span> : null}
     </div>
   );
 }

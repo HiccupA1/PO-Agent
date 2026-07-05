@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.po_agent import ProductOwnerAgent
 from app.core.config import settings
+from app.llm.provider_factory import get_llm_status
 from app.schemas.agent import AgentRunRequest, AgentRunResponse, ToolListResponse, ToolRunRequest, ToolRunResponse, TraceStep
 from app.tools.registry import create_default_tool_registry
 
@@ -23,6 +24,11 @@ agent = ProductOwnerAgent(tool_registry=tool_registry)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "po-agent"}
+
+
+@app.get("/llm/status")
+def llm_status() -> dict[str, object]:
+    return get_llm_status()
 
 
 @app.post("/agent/run", response_model=AgentRunResponse)

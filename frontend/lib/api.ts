@@ -158,6 +158,27 @@ export type AgentResponse = {
   trace: TraceEvent[];
   human_review_required: boolean;
   review_reason?: string | null;
+  runtime: AgentRuntimeMetadata;
+};
+
+export type RuntimeMode = "mock" | "llm";
+
+export type AgentRuntimeMetadata = {
+  mode_requested: string;
+  mode_used: string;
+  provider: string;
+  fallback_used: boolean;
+  fallback_reason?: string | null;
+};
+
+export type LLMStatus = {
+  mode: string;
+  provider: string;
+  model?: string;
+  available: boolean;
+  fallback_used: boolean;
+  fallback_reason?: string | null;
+  message: string;
 };
 
 export type ToolManifest = {
@@ -177,7 +198,11 @@ export type ToolRunResponse = {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-export async function runAgent(task: AgentTask, input: string): Promise<AgentResponse> {
+export async function runAgent(
+  task: AgentTask,
+  input: string,
+  runtimeMode: RuntimeMode = "mock"
+): Promise<AgentResponse> {
   const response = await fetch(`${API_BASE_URL}/agent/run`, {
     method: "POST",
     headers: {
@@ -186,12 +211,25 @@ export async function runAgent(task: AgentTask, input: string): Promise<AgentRes
     body: JSON.stringify({
       task,
       input,
-      context: {}
+      context: {},
+      runtime: {
+        mode: runtimeMode
+      }
     })
   });
 
   if (!response.ok) {
     throw new Error("Agent request failed.");
+  }
+
+  return response.json();
+}
+
+export async function getLLMStatus(): Promise<LLMStatus> {
+  const response = await fetch(`${API_BASE_URL}/llm/status`);
+
+  if (!response.ok) {
+    throw new Error("LLM status request failed.");
   }
 
   return response.json();

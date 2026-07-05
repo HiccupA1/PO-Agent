@@ -15,6 +15,19 @@ class AgentRunRequest(BaseModel):
     task: AgentTask
     input: str = ""
     context: dict[str, Any] = Field(default_factory=dict)
+    runtime: "AgentRuntimeRequest" = Field(default_factory=lambda: AgentRuntimeRequest())
+
+
+class AgentRuntimeRequest(BaseModel):
+    mode: Literal["mock", "llm"] | None = None
+
+
+class AgentRuntimeMetadata(BaseModel):
+    mode_requested: str
+    mode_used: str
+    provider: str
+    fallback_used: bool
+    fallback_reason: str | None = None
 
 
 class TraceStep(BaseModel):
@@ -189,6 +202,14 @@ class AgentRunResponse(BaseModel):
     trace: list[TraceStep]
     human_review_required: bool
     review_reason: str | None = None
+    runtime: AgentRuntimeMetadata = Field(
+        default_factory=lambda: AgentRuntimeMetadata(
+            mode_requested="mock",
+            mode_used="mock",
+            provider="mock",
+            fallback_used=False,
+        )
+    )
 
 
 TraceEvent = TraceStep

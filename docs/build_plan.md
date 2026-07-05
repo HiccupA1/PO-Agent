@@ -43,7 +43,7 @@ Current capabilities:
 - Records prioritization-specific audit metadata
 - Renders prioritization results in the frontend
 
-## Phase 4: MCP-Style Integration Layer - Implemented
+## Phase 4: MCP-Style Integration Layer - Complete
 
 Implemented a registry-based MCP-style mock tool layer.
 
@@ -56,9 +56,20 @@ Current capabilities:
 - Adds tool trace metadata for tool name, input summary, output summary, and status
 - Adds a frontend Tool Explorer for manifests and simple tool execution
 
-## Phase 5: Real LLM / Claude Agent SDK Adapter
+## Phase 5: Real LLM / Claude Agent SDK Adapter - Implemented
 
-Replace deterministic mock behavior with a production-grade agent loop, stronger observability, review checkpoints, and deployment-ready controls.
+Added a safe LLM adapter layer while preserving deterministic mock behavior.
+
+Current capabilities:
+
+- Supports mock mode by default
+- Supports optional LLM-assisted mode
+- Adds OpenAI-compatible provider shell using environment variables
+- Adds `/llm/status`
+- Adds runtime metadata to agent responses
+- Adds JSON guard validation and fallback behavior
+- Adds prompt templates for all agent tasks
+- Adds frontend runtime selector and status panel
 
 ## Phase 6: Demo Polish and Interview Walkthrough
 

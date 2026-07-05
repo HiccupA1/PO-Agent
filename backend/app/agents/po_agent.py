@@ -1,7 +1,15 @@
+from pathlib import Path
+from typing import Any, Type
+
+from pydantic import BaseModel
+
+from app.llm.json_guard import fallback_to_mock_output, safe_parse_json, validate_required_keys
+from app.llm.provider_factory import select_provider
 from app.schemas.agent import (
     AcceptanceCriteriaOutput,
     AgentRunRequest,
     AgentRunResponse,
+    AgentRuntimeMetadata,
     DORCheckOutput,
     EpicDecompositionOutput,
     PrioritizationOutput,
@@ -121,6 +129,13 @@ class ProductOwnerAgent:
         )
         if not isinstance(output, AcceptanceCriteriaOutput):
             raise TypeError("Expected structured acceptance criteria output.")
+        output, runtime = self._apply_runtime(
+            request=request,
+            trace=trace,
+            deterministic_output=output,
+            output_model=AcceptanceCriteriaOutput,
+            context={"product_context": product_context, "backlog_items": backlog_items},
+        )
 
         self.trace_service.add(
             trace,
@@ -155,6 +170,7 @@ class ProductOwnerAgent:
             trace=trace,
             human_review_required=output.human_review_required,
             review_reason=output.review_reason,
+            runtime=runtime,
         )
 
     def _run_epic_decomposition(
@@ -202,6 +218,13 @@ class ProductOwnerAgent:
         )
         if not isinstance(output, EpicDecompositionOutput):
             raise TypeError("Expected structured epic decomposition output.")
+        output, runtime = self._apply_runtime(
+            request=request,
+            trace=trace,
+            deterministic_output=output,
+            output_model=EpicDecompositionOutput,
+            context={"product_context": product_context, "backlog_items": backlog_items},
+        )
 
         self.trace_service.add(
             trace,
@@ -246,6 +269,7 @@ class ProductOwnerAgent:
             trace=trace,
             human_review_required=output.human_review_required,
             review_reason=output.review_reason,
+            runtime=runtime,
         )
 
     def _run_dor_check(
@@ -281,6 +305,13 @@ class ProductOwnerAgent:
         )
         if not isinstance(output, DORCheckOutput):
             raise TypeError("Expected structured DoR check output.")
+        output, runtime = self._apply_runtime(
+            request=request,
+            trace=trace,
+            deterministic_output=output,
+            output_model=DORCheckOutput,
+            context={"stakeholder_notes": "mock_sharepoint.search_stakeholder_notes"},
+        )
 
         self.trace_service.add(
             trace,
@@ -327,6 +358,7 @@ class ProductOwnerAgent:
             trace=trace,
             human_review_required=output.human_review_required,
             review_reason=output.review_reason,
+            runtime=runtime,
         )
 
     def _run_prioritization(
@@ -371,6 +403,13 @@ class ProductOwnerAgent:
         )
         if not isinstance(output, PrioritizationOutput):
             raise TypeError("Expected structured prioritization output.")
+        output, runtime = self._apply_runtime(
+            request=request,
+            trace=trace,
+            deterministic_output=output,
+            output_model=PrioritizationOutput,
+            context={"product_context": product_context, "backlog_items": backlog_items},
+        )
 
         self.trace_service.add(
             trace,
@@ -424,6 +463,7 @@ class ProductOwnerAgent:
             trace=trace,
             human_review_required=output.human_review_required,
             review_reason=output.review_reason,
+            runtime=runtime,
         )
 
     def _record_audit(
@@ -509,3 +549,108 @@ class ProductOwnerAgent:
             else:
                 parts.append(f"{key}: {str(value)[:80]}")
         return "; ".join(parts) if parts else "empty"
+
+    def _apply_runtime(
+        self,
+        request: AgentRunRequest,
+        trace: list[TraceStep],
+        deterministic_output: BaseModel,
+        output_model: Type[BaseModel],
+        context: dict[str, Any],
+    ) -> tuple[Any, AgentRuntimeMetadata]:
+        runtime_mode = request.runtime.mode if request.runtime else None
+        selection = select_provider(runtime_mode)
+        prompt = self._load_prompt(request.task)
+        mock_output = deterministic_output.model_dump()
+        expected_schema = output_model.model_json_schema()
+        required_keys = list(mock_output.keys())
+
+        self.trace_service.add(
+            trace,
+            "evaluation",
+            "Resolved agent runtime mode and provider.",
+            metadata={
+                "mode_requested": selection.mode_requested,
+                "mode_used": selection.mode_used,
+                "provider": selection.provider_name,
+                "fallback_used": selection.fallback_used,
+                "fallback_reason": selection.fallback_reason,
+            },
+        )
+        self.trace_service.add(
+            trace,
+            "evaluation",
+            "Loaded task prompt template for structured output generation.",
+            metadata={"prompt": f"{request.task}.md", "status": "loaded" if prompt else "missing"},
+        )
+
+        if selection.fallback_used:
+            self.trace_service.add(
+                trace,
+                "evaluation",
+                "LLM-assisted mode was requested but provider configuration is incomplete; using mock output.",
+                metadata={"fallback_reason": selection.fallback_reason},
+            )
+            return deterministic_output, AgentRuntimeMetadata(
+                mode_requested=selection.mode_requested,
+                mode_used=selection.mode_used,
+                provider=selection.provider_name,
+                fallback_used=True,
+                fallback_reason=selection.fallback_reason,
+            )
+
+        try:
+            provider_output = selection.provider.generate_structured_output(
+                task=request.task,
+                system_prompt=prompt,
+                user_input=request.input,
+                context={**context, "mock_output": mock_output},
+                expected_schema=expected_schema,
+            )
+            self.trace_service.add(
+                trace,
+                "evaluation",
+                "Provider returned structured output candidate.",
+                metadata={"provider": selection.provider_name, "mode_used": selection.mode_used},
+            )
+            parsed, parse_error = safe_parse_json(provider_output)
+            if parse_error or parsed is None:
+                _, reason = fallback_to_mock_output(mock_output, parse_error or "Provider output was empty.")
+                raise ValueError(reason)
+            valid, validation_error = validate_required_keys(parsed, required_keys)
+            if not valid:
+                _, reason = fallback_to_mock_output(mock_output, validation_error or "Required keys missing.")
+                raise ValueError(reason)
+            enhanced_output = output_model.model_validate(parsed)
+            self.trace_service.add(
+                trace,
+                "evaluation",
+                "JSON guard accepted provider output.",
+                metadata={"required_keys": required_keys, "status": "valid"},
+            )
+            return enhanced_output, AgentRuntimeMetadata(
+                mode_requested=selection.mode_requested,
+                mode_used=selection.mode_used,
+                provider=selection.provider_name,
+                fallback_used=False,
+            )
+        except Exception as exc:
+            self.trace_service.add(
+                trace,
+                "evaluation",
+                "Provider output failed or provider call was unavailable; falling back to deterministic mock output.",
+                metadata={"fallback_reason": str(exc)},
+            )
+            return deterministic_output, AgentRuntimeMetadata(
+                mode_requested=selection.mode_requested,
+                mode_used="mock",
+                provider="mock",
+                fallback_used=True,
+                fallback_reason=str(exc),
+            )
+
+    def _load_prompt(self, task: str) -> str:
+        prompt_path = Path(__file__).resolve().parent / "prompts" / f"{task}.md"
+        if not prompt_path.exists():
+            return ""
+        return prompt_path.read_text(encoding="utf-8")

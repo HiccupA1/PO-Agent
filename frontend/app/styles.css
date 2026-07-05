@@ -80,6 +80,12 @@ h3 {
   min-height: 360px;
 }
 
+.runtime-panel {
+  border-bottom: 1px solid #e1e6ed;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+}
+
 label {
   display: block;
   margin-bottom: 8px;
@@ -205,6 +211,23 @@ small {
   margin: 16px 0 0;
   padding-top: 12px;
   font-weight: 700;
+}
+
+.runtime-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.runtime-result span {
+  background: #f8fafc;
+  border: 1px solid #e1e6ed;
+  border-radius: 999px;
+  color: #344054;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 5px 8px;
 }
 
 .structured-output {

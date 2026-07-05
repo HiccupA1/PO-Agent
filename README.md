@@ -12,7 +12,7 @@ Technical Product Owners often spend too much time during sprint-zero and backlo
 
 ## Current Phase
 
-Phase 4: MCP-Style Integration Layer is implemented. The app now supports structured acceptance criteria drafting, epic decomposition, Definition of Ready checks, backlog prioritization, registry-based mock tools, tool manifests, debug tool execution, traceable tool metadata, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required yet.
+Phase 5: LLM / Agent SDK Adapter Layer is implemented. The app now supports structured Product Owner workflows, registry-based mock tools, optional LLM-assisted runtime mode, safe fallback to deterministic mock mode, runtime metadata, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required for local demo mode.
 
 ## Planned Stack
 
@@ -41,6 +41,7 @@ The backend exposes:
 - `POST /agent/run`
 - `GET /tools`
 - `POST /tools/run`
+- `GET /llm/status`
 
 ### Frontend
 
@@ -65,8 +66,39 @@ By default, the frontend expects the backend at `http://localhost:8000`.
 - Highlight quick wins, high-risk items, blocked items, and recommended sprint candidates
 - List MCP-style mock tool manifests
 - Run registered mock tools through a debug endpoint and frontend Tool Explorer
+- Select mock or LLM-assisted runtime mode
+- Fall back to deterministic mock output when provider config is missing or malformed
 - Return observable agent trace steps
 - Show a local backlog preview
+
+## Runtime Modes
+
+Mock mode is the default. It is deterministic, local, and requires no API key.
+
+LLM-assisted mode is optional. When requested, the backend attempts an OpenAI-compatible provider only if environment configuration exists. If configuration is missing, provider output is malformed, or validation fails, the agent falls back to mock output and records that fallback in trace and response metadata.
+
+Environment variables:
+
+```env
+LLM_MODE=mock
+LLM_PROVIDER=mock
+LLM_API_KEY=
+LLM_BASE_URL=
+LLM_MODEL=
+LLM_TIMEOUT_SECONDS=30
+```
+
+Runtime metadata is included in every `/agent/run` response:
+
+```json
+{
+  "mode_requested": "llm",
+  "mode_used": "mock",
+  "provider": "mock",
+  "fallback_used": true,
+  "fallback_reason": "LLM_API_KEY missing"
+}
+```
 
 ## MCP-Style Tool Layer
 
@@ -176,5 +208,5 @@ Scoring model:
 - Jira MCP tool integration
 - Microsoft Graph, Teams, and SharePoint MCP tools
 - Persistent audit logging
-- Claude Agent SDK or real LLM adapter
+- Claude Agent SDK adapter
 - Human-in-the-loop approval workflows
