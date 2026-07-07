@@ -12,7 +12,7 @@ Technical Product Owners often spend too much time during sprint-zero and backlo
 
 ## Current Phase
 
-Phase 5: LLM / Agent SDK Adapter Layer is implemented. The app now supports structured Product Owner workflows, registry-based mock tools, optional LLM-assisted runtime mode, safe fallback to deterministic mock mode, runtime metadata, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required for local demo mode.
+Phase 5B: Gemini provider integration is implemented. The app supports structured Product Owner workflows, registry-based mock tools, optional LLM-assisted runtime mode, Gemini/OpenAI-compatible provider adapters, safe fallback to deterministic mock mode, runtime metadata, lightweight audit summaries, and human review checkpoints. No paid APIs, real LLM calls, authentication, or database are required for local demo mode.
 
 ## Planned Stack
 
@@ -35,6 +35,20 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+From the project root, you can also use:
+
+```powershell
+.\scripts\start-backend.ps1
+```
+
+If Windows has a stale process holding port `8000`, start on another port:
+
+```powershell
+.\scripts\start-backend.ps1 -Port 8001
+```
+
+After editing `backend/.env`, restart the backend process so the running server picks up the new local configuration.
+
 The backend exposes:
 
 - `GET /health`
@@ -42,6 +56,7 @@ The backend exposes:
 - `GET /tools`
 - `POST /tools/run`
 - `GET /llm/status`
+- `GET /llm/debug-config`
 
 ### Frontend
 
@@ -62,7 +77,7 @@ By default, the frontend expects the backend at `http://localhost:8000`.
 - Decompose an epic into 4 to 6 INVEST-style user stories
 - Generate release slices for MVP, later enhancements, and operational/admin work
 - Check Definition of Ready with structured pass/fail analysis and recommendations
-- Prioritize backlog items using a deterministic RICE + Risk + Readiness scoring model
+- Prioritize backlog items using a RICE + Risk + Readiness scoring model
 - Highlight quick wins, high-risk items, blocked items, and recommended sprint candidates
 - List MCP-style mock tool manifests
 - Run registered mock tools through a debug endpoint and frontend Tool Explorer
@@ -73,9 +88,11 @@ By default, the frontend expects the backend at `http://localhost:8000`.
 
 ## Runtime Modes
 
-Mock mode is the default. It is deterministic, local, and requires no API key.
+Mock mode is the default. It is deterministic, local, and uses rule-based templates so demos work without an API key.
 
-LLM-assisted mode is optional. When requested, the backend attempts an OpenAI-compatible provider only if environment configuration exists. If configuration is missing, provider output is malformed, or validation fails, the agent falls back to mock output and records that fallback in trace and response metadata.
+LLM mode is optional. When requested, the backend asks the configured provider, such as Gemini, to generate a fresh Product Owner response from the user input, workflow name, product context, backlog context, and tool results. The deterministic template output is prepared only as a fallback candidate and is not included in the Gemini prompt.
+
+If provider configuration is missing, Gemini times out, provider output is malformed, or schema validation fails, the agent returns the deterministic fallback and records that fallback in trace and response metadata.
 
 Environment variables:
 
@@ -86,19 +103,53 @@ LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
 LLM_TIMEOUT_SECONDS=30
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_TIMEOUT_SECONDS=120
 ```
+
+### Gemini Setup
+
+Mock mode is still the default. To test Gemini locally, create `backend/.env` yourself and keep it out of Git:
+
+```env
+LLM_MODE=llm
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your-local-gemini-key-here
+GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_TIMEOUT_SECONDS=120
+```
+
+Supported Gemini model values for this project:
+
+- `gemini-3.5-flash`
+- `gemini-3.1-flash-lite`
+
+Never commit API keys. `backend/.env` is ignored by Git and must stay local. Gemini keys are read by the backend only and are never exposed to frontend code. Switch models by changing `GEMINI_MODEL` in `backend/.env`.
+
+Use `GET /llm/status` to confirm the active provider, model, timeout, configured state, and fallback state. Use `GET /llm/debug-config` only for safe local diagnostics; it reports whether a Gemini key is present without returning the key.
 
 Runtime metadata is included in every `/agent/run` response:
 
 ```json
 {
   "mode_requested": "llm",
-  "mode_used": "mock",
-  "provider": "mock",
-  "fallback_used": true,
-  "fallback_reason": "LLM_API_KEY missing"
+  "mode_used": "llm",
+  "provider": "gemini",
+  "provider_configured": true,
+  "generation_source": "llm",
+  "fallback_used": false,
+  "fallback_reason": null
 }
 ```
+
+`runtime.generation_source` explains what produced the final answer:
+
+- `mock`: deterministic local template output
+- `llm`: Gemini/provider-generated output
+- `fallback`: deterministic output returned because the provider was unavailable or invalid
+
+`runtime.fallback_used` shows whether the fallback path was used.
 
 ## MCP-Style Tool Layer
 

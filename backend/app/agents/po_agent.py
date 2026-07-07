@@ -140,7 +140,7 @@ class ProductOwnerAgent:
         self.trace_service.add(
             trace,
             "evaluation",
-            "Evaluated Definition of Ready using deterministic readiness rules.",
+            "Evaluated Definition of Ready using readiness rules.",
             metadata={"dor_score": output.definition_of_ready.score},
         )
         self.trace_service.add(
@@ -290,7 +290,7 @@ class ProductOwnerAgent:
             metadata={"input_preview": request.input[:80]},
         )
 
-        self._execute_tool(
+        stakeholder_notes = self._execute_tool(
             trace,
             "mock_sharepoint.search_stakeholder_notes",
             {"query": request.input, "limit": 2},
@@ -310,7 +310,7 @@ class ProductOwnerAgent:
             trace=trace,
             deterministic_output=output,
             output_model=DORCheckOutput,
-            context={"stakeholder_notes": "mock_sharepoint.search_stakeholder_notes"},
+            context={"stakeholder_notes": stakeholder_notes},
         )
 
         self.trace_service.add(
@@ -561,9 +561,9 @@ class ProductOwnerAgent:
         runtime_mode = request.runtime.mode if request.runtime else None
         selection = select_provider(runtime_mode)
         prompt = self._load_prompt(request.task)
-        mock_output = deterministic_output.model_dump()
+        fallback_output = deterministic_output.model_dump()
         expected_schema = output_model.model_json_schema()
-        required_keys = list(mock_output.keys())
+        required_keys = list(fallback_output.keys())
 
         self.trace_service.add(
             trace,
@@ -573,6 +573,11 @@ class ProductOwnerAgent:
                 "mode_requested": selection.mode_requested,
                 "mode_used": selection.mode_used,
                 "provider": selection.provider_name,
+                "model": selection.model,
+                "timeout_seconds": selection.timeout_seconds,
+                "provider_configured": selection.provider_configured,
+                "generation_source": "fallback" if selection.fallback_used else selection.mode_used,
+                "status": "fallback" if selection.fallback_used else "selected",
                 "fallback_used": selection.fallback_used,
                 "fallback_reason": selection.fallback_reason,
             },
@@ -584,17 +589,43 @@ class ProductOwnerAgent:
             metadata={"prompt": f"{request.task}.md", "status": "loaded" if prompt else "missing"},
         )
 
-        if selection.fallback_used:
+        if selection.mode_requested == "mock":
             self.trace_service.add(
                 trace,
                 "evaluation",
-                "LLM-assisted mode was requested but provider configuration is incomplete; using mock output.",
-                metadata={"fallback_reason": selection.fallback_reason},
+                "Mock mode selected; returning deterministic local output.",
+                metadata={"generation_source": "mock", "provider_configured": selection.provider_configured},
             )
             return deterministic_output, AgentRuntimeMetadata(
                 mode_requested=selection.mode_requested,
                 mode_used=selection.mode_used,
                 provider=selection.provider_name,
+                model=selection.model,
+                timeout_seconds=selection.timeout_seconds,
+                provider_configured=selection.provider_configured,
+                generation_source="mock",
+                fallback_used=False,
+            )
+
+        if selection.fallback_used:
+            self.trace_service.add(
+                trace,
+                "evaluation",
+                "LLM-assisted mode was requested but provider configuration is incomplete; using deterministic fallback output.",
+                metadata={
+                    "generation_source": "fallback",
+                    "provider_configured": selection.provider_configured,
+                    "fallback_reason": selection.fallback_reason,
+                },
+            )
+            return deterministic_output, AgentRuntimeMetadata(
+                mode_requested=selection.mode_requested,
+                mode_used=selection.mode_used,
+                provider=selection.provider_name,
+                model=selection.model,
+                timeout_seconds=selection.timeout_seconds,
+                provider_configured=selection.provider_configured,
+                generation_source="fallback",
                 fallback_used=True,
                 fallback_reason=selection.fallback_reason,
             )
@@ -604,47 +635,74 @@ class ProductOwnerAgent:
                 task=request.task,
                 system_prompt=prompt,
                 user_input=request.input,
-                context={**context, "mock_output": mock_output},
+                context=context,
                 expected_schema=expected_schema,
             )
             self.trace_service.add(
                 trace,
                 "evaluation",
                 "Provider returned structured output candidate.",
-                metadata={"provider": selection.provider_name, "mode_used": selection.mode_used},
+                metadata={
+                    "provider": selection.provider_name,
+                    "model": selection.model,
+                    "timeout_seconds": selection.timeout_seconds,
+                    "provider_configured": selection.provider_configured,
+                    "attempt_count": getattr(selection.provider, "last_attempt_count", None),
+                    "mode_used": selection.mode_used,
+                    "generation_source": "llm",
+                    "status": "success",
+                },
             )
             parsed, parse_error = safe_parse_json(provider_output)
             if parse_error or parsed is None:
-                _, reason = fallback_to_mock_output(mock_output, parse_error or "Provider output was empty.")
+                _, reason = fallback_to_mock_output(fallback_output, parse_error or "Provider output was empty.")
                 raise ValueError(reason)
             valid, validation_error = validate_required_keys(parsed, required_keys)
             if not valid:
-                _, reason = fallback_to_mock_output(mock_output, validation_error or "Required keys missing.")
+                _, reason = fallback_to_mock_output(fallback_output, validation_error or "Required keys missing.")
                 raise ValueError(reason)
             enhanced_output = output_model.model_validate(parsed)
             self.trace_service.add(
                 trace,
                 "evaluation",
                 "JSON guard accepted provider output.",
-                metadata={"required_keys": required_keys, "status": "valid"},
+                metadata={"required_keys": required_keys, "generation_source": "llm", "status": "valid"},
             )
             return enhanced_output, AgentRuntimeMetadata(
                 mode_requested=selection.mode_requested,
                 mode_used=selection.mode_used,
                 provider=selection.provider_name,
+                model=selection.model,
+                timeout_seconds=selection.timeout_seconds,
+                provider_configured=selection.provider_configured,
+                generation_source="llm",
                 fallback_used=False,
             )
         except Exception as exc:
             self.trace_service.add(
                 trace,
                 "evaluation",
-                "Provider output failed or provider call was unavailable; falling back to deterministic mock output.",
-                metadata={"fallback_reason": str(exc)},
+                "Provider output failed or provider call was unavailable; falling back to deterministic output.",
+                metadata={
+                    "provider": selection.provider_name,
+                    "model": selection.model,
+                    "timeout_seconds": selection.timeout_seconds,
+                    "provider_configured": selection.provider_configured,
+                    "attempt_count": getattr(selection.provider, "last_attempt_count", None),
+                    "generation_source": "fallback",
+                    "status": "fallback",
+                    "reason": str(exc),
+                    "fallback_reason": str(exc),
+                },
             )
             return deterministic_output, AgentRuntimeMetadata(
                 mode_requested=selection.mode_requested,
                 mode_used="mock",
-                provider="mock",
+                provider=selection.provider_name,
+                model=selection.model,
+                timeout_seconds=selection.timeout_seconds,
+                provider_configured=selection.provider_configured,
+                generation_source="fallback",
                 fallback_used=True,
                 fallback_reason=str(exc),
             )

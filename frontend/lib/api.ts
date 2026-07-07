@@ -167,6 +167,10 @@ export type AgentRuntimeMetadata = {
   mode_requested: string;
   mode_used: string;
   provider: string;
+  model?: string | null;
+  timeout_seconds?: number | null;
+  provider_configured: boolean;
+  generation_source: "mock" | "llm" | "fallback";
   fallback_used: boolean;
   fallback_reason?: string | null;
 };
@@ -175,7 +179,9 @@ export type LLMStatus = {
   mode: string;
   provider: string;
   model?: string;
+  timeout_seconds?: number | null;
   available: boolean;
+  configured: boolean;
   fallback_used: boolean;
   fallback_reason?: string | null;
   message: string;

@@ -71,6 +71,19 @@ Current capabilities:
 - Adds prompt templates for all agent tasks
 - Adds frontend runtime selector and status panel
 
+## Phase 5B: Gemini Provider Integration - Implemented
+
+Added a backend-only Gemini provider adapter.
+
+Current capabilities:
+
+- Supports `LLM_PROVIDER=gemini`
+- Reads `GEMINI_API_KEY`, `GEMINI_MODEL`, and `GEMINI_TIMEOUT_SECONDS` from backend environment
+- Supports `gemini-3.5-flash` and `gemini-3.1-flash-lite` model configuration
+- Keeps mock mode as the default
+- Falls back safely to deterministic mock output when Gemini config is missing or provider calls fail
+- Updates `/llm/status` with provider, model, configured state, availability, and fallback message
+
 ## Phase 6: Demo Polish and Interview Walkthrough
 
 Create a guided demo script, polished sample data, and a concise enterprise AI narrative for interviews.

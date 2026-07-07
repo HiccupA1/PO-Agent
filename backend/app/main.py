@@ -1,9 +1,16 @@
+import sys
+from pathlib import Path
+
+backend_dir = Path(__file__).resolve().parents[1]
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.po_agent import ProductOwnerAgent
 from app.core.config import settings
-from app.llm.provider_factory import get_llm_status
+from app.llm.provider_factory import get_llm_status, get_safe_debug_config
 from app.schemas.agent import AgentRunRequest, AgentRunResponse, ToolListResponse, ToolRunRequest, ToolRunResponse, TraceStep
 from app.tools.registry import create_default_tool_registry
 
@@ -29,6 +36,11 @@ def health() -> dict[str, str]:
 @app.get("/llm/status")
 def llm_status() -> dict[str, object]:
     return get_llm_status()
+
+
+@app.get("/llm/debug-config")
+def llm_debug_config() -> dict[str, object]:
+    return get_safe_debug_config()
 
 
 @app.post("/agent/run", response_model=AgentRunResponse)

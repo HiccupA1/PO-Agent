@@ -203,7 +203,9 @@ export function AgentChat() {
           </select>
           {llmStatus ? (
             <small>
-              {llmStatus.message} Provider: {llmStatus.provider || "mock"}
+              {llmStatus.message} Provider: {llmStatus.provider || "mock"}. Model:{" "}
+              {llmStatus.model || "n/a"}. Timeout: {llmStatus.timeout_seconds ?? "n/a"}s.
+              Configured: {llmStatus.configured ? "Yes" : "No"}.
             </small>
           ) : (
             <small>LLM status unavailable until the backend is running.</small>
@@ -271,7 +273,11 @@ function RuntimeMetadataView({ runtime }: { runtime: AgentRuntimeMetadata }) {
     <div className="runtime-result">
       <span>Requested: {runtime.mode_requested}</span>
       <span>Used: {runtime.mode_used}</span>
+      <span>Source: {runtime.generation_source}</span>
       <span>Provider: {runtime.provider}</span>
+      {runtime.model ? <span>Model: {runtime.model}</span> : null}
+      {runtime.timeout_seconds ? <span>Timeout: {runtime.timeout_seconds}s</span> : null}
+      <span>Provider configured: {runtime.provider_configured ? "Yes" : "No"}</span>
       <span>Fallback: {runtime.fallback_used ? "Yes" : "No"}</span>
       {runtime.fallback_reason ? <span>{runtime.fallback_reason}</span> : null}
     </div>

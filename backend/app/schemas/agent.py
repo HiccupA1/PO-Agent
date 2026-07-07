@@ -26,6 +26,10 @@ class AgentRuntimeMetadata(BaseModel):
     mode_requested: str
     mode_used: str
     provider: str
+    model: str | None = None
+    timeout_seconds: int | None = None
+    provider_configured: bool = True
+    generation_source: Literal["mock", "llm", "fallback"] = "mock"
     fallback_used: bool
     fallback_reason: str | None = None
 
@@ -207,6 +211,10 @@ class AgentRunResponse(BaseModel):
             mode_requested="mock",
             mode_used="mock",
             provider="mock",
+            model=None,
+            timeout_seconds=None,
+            provider_configured=True,
+            generation_source="mock",
             fallback_used=False,
         )
     )

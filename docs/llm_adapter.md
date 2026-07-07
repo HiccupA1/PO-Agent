@@ -31,11 +31,28 @@ This keeps the PO Agent independent from any single LLM vendor or SDK.
 
 If configuration is missing, the provider is not used and the agent falls back to mock mode.
 
+## Gemini Provider
+
+`GeminiProvider` is an optional backend-only provider that calls the Gemini REST API directly. It reads only backend environment variables:
+
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL`
+- `GEMINI_TIMEOUT_SECONDS`
+
+Supported project model values:
+
+- `gemini-3.5-flash`
+- `gemini-3.1-flash-lite`
+
+The provider asks Gemini to generate a fresh context-aware Product Owner response and return only valid JSON. If the response contains JSON wrapped in markdown fences, the provider strips the fences before parsing. If the request fails or the output cannot be parsed as a JSON object, the agent falls back to deterministic mock output.
+
+API keys never go to the browser. The frontend only receives provider status, model name, configured state, and fallback metadata.
+
 ## Runtime Modes
 
 `mock` mode is deterministic and local.
 
-`llm` mode attempts provider generation. It is safe to request even without API keys because the provider factory and JSON guard fall back to mock output.
+`llm` mode attempts provider generation using the user input, workflow name, product context, backlog context, and tool results. It does not send deterministic mock output to the provider. It is safe to request even without API keys because the provider factory and JSON guard fall back to deterministic output.
 
 ## JSON Guard
 
@@ -47,13 +64,15 @@ The JSON guard prevents backend crashes and unsafe provider output by:
 
 ## Fallback Strategy
 
-Every agent run starts with deterministic output. LLM output is treated as an optional enhancement, not a required dependency. If provider configuration, network calls, JSON parsing, schema validation, or model validation fails, the deterministic output is returned.
+Structured workflows still prepare deterministic output so there is always a safe fallback. In mock mode, that deterministic output is returned directly. In LLM mode, the deterministic output is held back and is returned only if provider configuration, network calls, JSON parsing, schema validation, or model validation fails.
 
 Runtime metadata records:
 
 - requested mode
 - used mode
 - provider
+- provider configured state
+- generation source: `mock`, `llm`, or `fallback`
 - fallback usage
 - fallback reason
 
